@@ -204,11 +204,11 @@ class IntegratorContractTest {
     }
 
     @Test
-    void defaultSweepHasFourStableOrdersAndFitsTheOutputBudget() {
+    void defaultSweepHasFiveStableOrdersAndFitsTheOutputBudget() {
         System1Parameters parameters = System1Parameters.defaults();
 
-        assertEquals(List.of(0.01, 0.001, 0.0001, 0.00001), parameters.dts());
-        assertEquals(2_222_016L, System1Command.estimateOutputRows(parameters, 4));
+        assertEquals(List.of(0.01, 0.001, 0.0001, 0.00001, 0.000001), parameters.dts());
+        assertEquals(22_222_020L, System1Command.estimateOutputRows(parameters, 4));
     }
 
     @Test
@@ -218,7 +218,7 @@ class IntegratorContractTest {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 new System1Command().run(new String[]{
                         "--tf", "1",
-                        "--dt", "0.000001",
+                        "--dt", "0.0000001",
                         "--output", outputPath.toString()
                 })
         );

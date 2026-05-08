@@ -32,7 +32,7 @@ class TrajectoryCsvWriterTest {
         assertEquals("# tf=5.0", lines.get(4));
         assertEquals("# x0=1.0", lines.get(5));
         assertEquals("# v0=-0.7142857142857143", lines.get(6));
-        assertEquals("# dts=0.01,0.001,1.0E-4,1.0E-5", lines.get(7));
+        assertEquals("# dts=0.01,0.001,1.0E-4,1.0E-5,1.0E-6", lines.get(7));
         assertEquals("method,dt,time,x,v", lines.get(8));
         assertEquals("euler,0.01,0.0,1.0,-0.7142857142857143", lines.get(9));
     }

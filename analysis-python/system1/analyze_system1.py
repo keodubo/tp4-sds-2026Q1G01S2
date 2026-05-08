@@ -45,7 +45,34 @@ class EcmRow:
     ecm: float
 
 
+@dataclass
+class EcmAccumulator:
+    rows: int = 0
+    squared_error_sum: float = 0.0
+
+
 REQUIRED_SYSTEM1_METHODS = ("beeman", "euler", "gear5", "verlet")
+ECM_PLOT_METHOD_ORDER = ("euler", "gear5", "verlet", "beeman")
+ECM_PLOT_STYLES = {
+    "euler": {"marker": "o", "linestyle": "-", "linewidth": 1.4, "zorder": 2},
+    "gear5": {"marker": "s", "linestyle": "-", "linewidth": 1.4, "zorder": 2},
+    "verlet": {"marker": "^", "linestyle": "-.", "linewidth": 1.4, "zorder": 3},
+    "beeman": {
+        "marker": "D",
+        "linestyle": "--",
+        "linewidth": 1.8,
+        "markerfacecolor": "white",
+        "markeredgewidth": 1.2,
+        "zorder": 4,
+    },
+}
+POSITION_PLOT_METHOD_ORDER = ("euler", "gear5", "verlet", "beeman")
+POSITION_PLOT_STYLES = {
+    "euler": {"marker": "o", "linestyle": "-", "color": "#1f77b4", "linewidth": 1.0},
+    "gear5": {"marker": "s", "linestyle": "--", "color": "#ff7f0e", "linewidth": 1.0},
+    "verlet": {"marker": "^", "linestyle": "-.", "color": "#2ca02c", "linewidth": 1.0},
+    "beeman": {"marker": "x", "linestyle": ":", "color": "#9467bd", "linewidth": 1.2},
+}
 
 
 def analytical_state(time: float, params: PhysicalParameters) -> AnalyticalState:
@@ -69,49 +96,95 @@ def analytical_state(time: float, params: PhysicalParameters) -> AnalyticalState
 
 
 def compute_ecm(rows: Iterable[TrajectoryRow], params: PhysicalParameters) -> list[EcmRow]:
-    grouped_errors: dict[tuple[str, float], list[float]] = defaultdict(list)
+    grouped_errors: dict[tuple[str, float], EcmAccumulator] = defaultdict(EcmAccumulator)
     for row in rows:
         analytical = analytical_state(row.time, params)
         squared_error = (row.position - analytical.position) ** 2
-        grouped_errors[(row.method, row.dt)].append(squared_error)
+        accumulator = grouped_errors[(row.method, row.dt)]
+        accumulator.rows += 1
+        accumulator.squared_error_sum += squared_error
 
     ecm_rows = [
         EcmRow(
             method=method,
             dt=dt,
-            rows=len(errors),
-            ecm=sum(errors) / len(errors),
+            rows=accumulator.rows,
+            ecm=accumulator.squared_error_sum / accumulator.rows,
         )
-        for (method, dt), errors in grouped_errors.items()
+        for (method, dt), accumulator in grouped_errors.items()
     ]
     return sorted(ecm_rows, key=lambda row: (row.method, row.dt))
 
 
 def read_trajectory_csv(path: Path) -> tuple[PhysicalParameters, list[TrajectoryRow]]:
+    params = read_trajectory_metadata(path)
+    rows = list(iter_trajectory_rows(path))
+    if not rows:
+        raise ValueError(f"trajectory CSV has no data rows: {path}")
+    return params, rows
+
+
+def read_trajectory_metadata(path: Path) -> PhysicalParameters:
     metadata: dict[str, str] = {}
-    data_lines: list[str] = []
     with path.open(newline="", encoding="utf-8") as input_file:
         for line in input_file:
             if line.startswith("#"):
                 key, value = parse_metadata_line(line)
                 metadata[key] = value
-            else:
-                data_lines.append(line)
+            elif line.strip():
+                break
 
-    params = physical_parameters_from_metadata(metadata)
-    rows = [
-        TrajectoryRow(
-            method=record["method"],
-            dt=float(record["dt"]),
-            time=float(record["time"]),
-            position=float(record["x"]),
-            velocity=float(record["v"]),
-        )
-        for record in csv.DictReader(data_lines)
-    ]
-    if not rows:
+    return physical_parameters_from_metadata(metadata)
+
+
+def iter_trajectory_rows(path: Path) -> Iterable[TrajectoryRow]:
+    with path.open(newline="", encoding="utf-8") as input_file:
+        records = csv.DictReader(line for line in input_file if not line.startswith("#"))
+        for record in records:
+            yield TrajectoryRow(
+                method=record["method"],
+                dt=float(record["dt"]),
+                time=float(record["time"]),
+                position=float(record["x"]),
+                velocity=float(record["v"]),
+            )
+
+
+def analyze_trajectory_rows(
+    path: Path,
+    params: PhysicalParameters,
+    figure_dts: tuple[float, ...] = (),
+) -> tuple[list[EcmRow], list[TrajectoryRow]]:
+    grouped_errors: dict[tuple[str, float], EcmAccumulator] = defaultdict(EcmAccumulator)
+    figure_rows: list[TrajectoryRow] = []
+
+    for row in iter_trajectory_rows(path):
+        analytical = analytical_state(row.time, params)
+        squared_error = (row.position - analytical.position) ** 2
+        accumulator = grouped_errors[(row.method, row.dt)]
+        accumulator.rows += 1
+        accumulator.squared_error_sum += squared_error
+
+        if matches_any_dt(row.dt, figure_dts):
+            figure_rows.append(row)
+
+    if not grouped_errors:
         raise ValueError(f"trajectory CSV has no data rows: {path}")
-    return params, rows
+
+    ecm_rows = [
+        EcmRow(
+            method=method,
+            dt=dt,
+            rows=accumulator.rows,
+            ecm=accumulator.squared_error_sum / accumulator.rows,
+        )
+        for (method, dt), accumulator in grouped_errors.items()
+    ]
+    return sorted(ecm_rows, key=lambda row: (row.method, row.dt)), figure_rows
+
+
+def matches_any_dt(dt: float, requested_dts: tuple[float, ...]) -> bool:
+    return any(math.isclose(dt, requested_dt, rel_tol=1e-12, abs_tol=1e-15) for requested_dt in requested_dts)
 
 
 def parse_metadata_line(line: str) -> tuple[str, str]:
@@ -195,16 +268,7 @@ def write_position_figures(
         analytical_positions = [analytical_state(time, params).position for time in times]
 
         fig, axis = plt.subplots(figsize=(9, 5))
-        axis.plot(times, analytical_positions, "--", color="black", linewidth=1.6, label="analytical")
-        for method in sorted(rows_by_method):
-            method_rows = sorted(rows_by_method[method], key=lambda row: row.time)
-            axis.plot(
-                [row.time for row in method_rows],
-                [row.position for row in method_rows],
-                linewidth=1.1,
-                label=method,
-            )
-
+        plot_position_curves(axis, times, analytical_positions, rows_by_method)
         axis.set_title(f"System 1 position comparison dt={format_float(dt)}")
         axis.set_xlabel("time (s)")
         axis.set_ylabel("x (m)")
@@ -217,7 +281,97 @@ def write_position_figures(
         plt.close(fig)
         generated.append(output_path)
 
+        if math.isclose(dt, min(figure_dts), rel_tol=1e-12, abs_tol=1e-15):
+            zoom_path = figures_dir / f"system1_position_dt_{format_float(dt)}_zoom.png"
+            write_position_zoom_figure(zoom_path, times, analytical_positions, rows_by_method, dt)
+            generated.append(zoom_path)
+
     return generated
+
+
+def plot_position_curves(axis, times: list[float], analytical_positions: list[float], rows_by_method: dict[str, list[TrajectoryRow]]) -> None:
+    axis.plot(times, analytical_positions, color="black", linewidth=1.8, linestyle="-", label="analytical")
+    for method in POSITION_PLOT_METHOD_ORDER:
+        if method not in rows_by_method:
+            continue
+        method_rows = sorted(rows_by_method[method], key=lambda row: row.time)
+        style = dict(POSITION_PLOT_STYLES[method])
+        if style["marker"] != "x":
+            style["markerfacecolor"] = "white"
+            style["markeredgewidth"] = 1.0
+        axis.plot(
+            [row.time for row in method_rows],
+            [row.position for row in method_rows],
+            label=method,
+            markersize=4.0,
+            markevery=marker_interval(len(method_rows)),
+            **style,
+        )
+
+
+def marker_interval(series_length: int) -> int:
+    return max(1, series_length // 45)
+
+
+def write_position_zoom_figure(
+    output_path: Path,
+    times: list[float],
+    analytical_positions: list[float],
+    rows_by_method: dict[str, list[TrajectoryRow]],
+    dt: float,
+) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, axis = plt.subplots(figsize=(9, 5))
+    plot_position_curves(axis, times, analytical_positions, rows_by_method)
+    apply_zoom_window(axis, times, analytical_positions, rows_by_method)
+    axis.set_title(f"System 1 position comparison dt={format_float(dt)} zoom")
+    axis.set_xlabel("time (s)")
+    axis.set_ylabel("x (m)")
+    axis.grid(True, linestyle="--", alpha=0.35)
+    axis.legend()
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+
+
+def apply_zoom_window(axis, times: list[float], analytical_positions: list[float], rows_by_method: dict[str, list[TrajectoryRow]]) -> None:
+    ordered_method_rows = [
+        sorted(rows_by_method[method], key=lambda row: row.time)
+        for method in POSITION_PLOT_METHOD_ORDER
+        if method in rows_by_method
+    ]
+    if not times or not ordered_method_rows:
+        return
+
+    shared_length = min(len(times), len(analytical_positions), *(len(rows) for rows in ordered_method_rows))
+    if shared_length == 0:
+        return
+
+    spreads = []
+    for index in range(shared_length):
+        values = [analytical_positions[index]]
+        values.extend(method_rows[index].position for method_rows in ordered_method_rows)
+        spreads.append(max(values) - min(values))
+
+    center_index = max(range(shared_length), key=lambda index: spreads[index])
+    window_size = min(shared_length, max(80, shared_length // 50))
+    start = max(0, center_index - window_size // 2)
+    end = min(shared_length, start + window_size)
+    start = max(0, end - window_size)
+
+    window_values = analytical_positions[start:end]
+    for method_rows in ordered_method_rows:
+        window_values.extend(row.position for row in method_rows[start:end])
+
+    min_y = min(window_values)
+    max_y = max(window_values)
+    padding = max((max_y - min_y) * 0.20, 1e-12)
+    axis.set_xlim(times[start], times[end - 1])
+    axis.set_ylim(min_y - padding, max_y + padding)
 
 
 def validate_ecm_grid(
@@ -270,7 +424,7 @@ def write_ecm_vs_dt_figure(
 
     figures_dir.mkdir(parents=True, exist_ok=True)
     fig, axis = plt.subplots(figsize=(8, 5))
-    for method in REQUIRED_SYSTEM1_METHODS:
+    for method in ECM_PLOT_METHOD_ORDER:
         method_rows = sorted(
             (row for row in rows if row.method == method),
             key=lambda row: row.dt,
@@ -278,9 +432,8 @@ def write_ecm_vs_dt_figure(
         axis.loglog(
             [row.dt for row in method_rows],
             [row.ecm for row in method_rows],
-            marker="o",
-            linewidth=1.4,
             label=method,
+            **ECM_PLOT_STYLES[method],
         )
 
     axis.set_title("System 1 ECM vs dt")
@@ -408,8 +561,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--figures-dir", type=Path, help="Optional directory for analytical-vs-numerical figures.")
     parser.add_argument(
         "--figure-dt",
-        default="0.01,0.001",
-        help="Comma-separated dt values to plot when --figures-dir is provided. Defaults to 0.01,0.001.",
+        default="0.001",
+        help="Comma-separated dt values to plot when --figures-dir is provided. Defaults to 0.001.",
     )
     parser.add_argument(
         "--summary-output",
@@ -423,13 +576,16 @@ def main() -> None:
     args = parse_args()
     manifest_output = args.manifest_output or args.ecm_output.parent / "system1_outputs_manifest.csv"
 
-    params, rows = read_trajectory_csv(args.input)
-    ecm_rows = compute_ecm(rows, params)
+    figure_dts = tuple()
+    if args.figures_dir:
+        figure_dts = tuple(float(value.strip()) for value in args.figure_dt.split(",") if value.strip())
+
+    params = read_trajectory_metadata(args.input)
+    ecm_rows, figure_rows = analyze_trajectory_rows(args.input, params, figure_dts)
     write_ecm_csv(args.ecm_output, ecm_rows)
     figure_paths = []
     if args.figures_dir:
-        figure_dts = tuple(float(value.strip()) for value in args.figure_dt.split(",") if value.strip())
-        figure_paths = write_position_figures(args.figures_dir, rows, params, figure_dts)
+        figure_paths = write_position_figures(args.figures_dir, figure_rows, params, figure_dts)
     ecm_vs_dt_figure_path = None
     summary_path = None
     if args.summary_output:

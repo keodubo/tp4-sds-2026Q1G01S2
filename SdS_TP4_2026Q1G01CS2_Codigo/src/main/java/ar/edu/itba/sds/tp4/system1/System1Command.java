@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class System1Command {
-    private static final long MAX_OUTPUT_ROWS = 3_000_000L;
+    private static final long MAX_OUTPUT_ROWS = 25_000_000L;
 
     public void run(String[] args) {
         ParsedArgs parsedArgs = parse(args);
@@ -25,8 +25,7 @@ public final class System1Command {
                 new Gear5Integrator()
         );
         validateOutputRowBudget(parameters, integrators.size());
-        List<TrajectoryCsvWriter.Row> rows = buildRows(parameters, integrators);
-        new TrajectoryCsvWriter().write(parsedArgs.outputPath(), parameters, rows);
+        new TrajectoryCsvWriter().writeIntegratedTrajectories(parsedArgs.outputPath(), parameters, integrators);
         System.out.println("System 1 parameters validated.");
         System.out.println("Wrote System 1 trajectory CSV to " + parsedArgs.outputPath());
     }
@@ -37,7 +36,7 @@ public final class System1Command {
                   system1 --output <path> [--m <mass>] [--k <spring>] [--gamma <damping>] [--tf <seconds>] [--x0 <position>] [--v0 <velocity>] [--dt <csv>]
 
                 Defaults:
-                  --m 70 --k 10000 --gamma 100 --tf 5 --x0 1 --v0 -0.7142857142857143 --dt 0.01,0.001,0.0001,0.00001
+                  --m 70 --k 10000 --gamma 100 --tf 5 --x0 1 --v0 -0.7142857142857143 --dt 0.01,0.001,0.0001,0.00001,0.000001
                 """;
     }
 
@@ -91,18 +90,6 @@ public final class System1Command {
             parsed.add(parseDouble("--dt", value));
         }
         return parsed;
-    }
-
-    private static List<TrajectoryCsvWriter.Row> buildRows(System1Parameters parameters, List<Integrator> integrators) {
-        List<TrajectoryCsvWriter.Row> rows = new ArrayList<>();
-        for (Integrator integrator : integrators) {
-            for (double dt : parameters.dts()) {
-                for (OscillatorState state : integrator.integrate(parameters, dt)) {
-                    rows.add(new TrajectoryCsvWriter.Row(integrator.methodName(), dt, state));
-                }
-            }
-        }
-        return rows;
     }
 
     static void validateOutputRowBudget(System1Parameters parameters, int integratorCount) {

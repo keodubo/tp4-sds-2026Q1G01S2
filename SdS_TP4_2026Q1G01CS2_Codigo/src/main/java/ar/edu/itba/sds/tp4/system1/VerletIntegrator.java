@@ -1,7 +1,6 @@
 package ar.edu.itba.sds.tp4.system1;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.function.Consumer;
 
 public final class VerletIntegrator implements Integrator {
     @Override
@@ -10,24 +9,19 @@ public final class VerletIntegrator implements Integrator {
     }
 
     @Override
-    public List<OscillatorState> integrate(System1Parameters parameters, double dt) {
+    public void integrate(System1Parameters parameters, double dt, Consumer<OscillatorState> stateConsumer) {
         int steps = (int) Math.round(parameters.finalTime() / dt);
-        double[] positions = new double[steps + 3];
 
-        positions[0] = previousPosition(parameters, dt);
-        positions[1] = parameters.initialPosition();
+        double previousPosition = previousPosition(parameters, dt);
+        double position = parameters.initialPosition();
         for (int step = 0; step <= steps; step++) {
-            positions[step + 2] = nextPosition(parameters, dt, positions[step], positions[step + 1]);
-        }
-
-        List<OscillatorState> states = new ArrayList<>(steps + 1);
-        for (int step = 0; step <= steps; step++) {
+            double nextPosition = nextPosition(parameters, dt, previousPosition, position);
             double time = step * dt;
-            double position = positions[step + 1];
-            double velocity = (positions[step + 2] - positions[step]) / (2.0 * dt);
-            states.add(new OscillatorState(time, position, velocity));
+            double velocity = (nextPosition - previousPosition) / (2.0 * dt);
+            stateConsumer.accept(new OscillatorState(time, position, velocity));
+            previousPosition = position;
+            position = nextPosition;
         }
-        return states;
     }
 
     private static double previousPosition(System1Parameters parameters, double dt) {

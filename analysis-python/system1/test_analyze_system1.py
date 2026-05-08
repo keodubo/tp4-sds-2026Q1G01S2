@@ -7,8 +7,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analyze_system1 import (
+    ECM_PLOT_METHOD_ORDER,
+    ECM_PLOT_STYLES,
     EcmRow,
     PhysicalParameters,
+    POSITION_PLOT_METHOD_ORDER,
+    POSITION_PLOT_STYLES,
     TrajectoryRow,
     analytical_state,
     compute_ecm,
@@ -108,10 +112,10 @@ class AnalyzeSystem1Test(unittest.TestCase):
                     )
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            generated = write_position_figures(Path(temp_dir), rows, params, (0.01, 0.001))
+            generated = write_position_figures(Path(temp_dir), rows, params, (0.001,))
 
             self.assertEqual(
-                ["system1_position_dt_0.001.png", "system1_position_dt_0.01.png"],
+                ["system1_position_dt_0.001.png", "system1_position_dt_0.001_zoom.png"],
                 sorted(path.name for path in generated),
             )
             for path in generated:
@@ -146,27 +150,27 @@ class AnalyzeSystem1Test(unittest.TestCase):
     def test_ecm_grid_requires_every_method_for_every_default_dt(self):
         ecm_rows = phase6_ecm_rows()
 
-        validate_ecm_grid(ecm_rows, (0.01, 0.001, 0.0001, 0.00001))
+        validate_ecm_grid(ecm_rows, (0.01, 0.001, 0.0001, 0.00001, 0.000001))
 
         incomplete_rows = [
             row
             for row in ecm_rows
-            if not (row.method == "verlet" and math.isclose(row.dt, 0.00001))
+            if not (row.method == "verlet" and math.isclose(row.dt, 0.000001))
         ]
-        with self.assertRaisesRegex(ValueError, "verlet.*1e-05"):
-            validate_ecm_grid(incomplete_rows, (0.01, 0.001, 0.0001, 0.00001))
+        with self.assertRaisesRegex(ValueError, "verlet.*1e-06"):
+            validate_ecm_grid(incomplete_rows, (0.01, 0.001, 0.0001, 0.00001, 0.000001))
 
     def test_method_ranking_uses_lowest_ecm_at_smallest_dt(self):
         ranking = rank_methods_at_smallest_dt(phase6_ecm_rows())
 
         self.assertEqual("gear5", ranking[0].method)
-        self.assertEqual(0.00001, ranking[0].dt)
+        self.assertEqual(0.000001, ranking[0].dt)
         self.assertEqual(["gear5", "beeman", "verlet", "euler"], [row.method for row in ranking])
 
     def test_ecm_vs_dt_figure_and_method_summary_are_generated(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            figure = write_ecm_vs_dt_figure(temp_path, phase6_ecm_rows(), (0.01, 0.001, 0.0001, 0.00001))
+            figure = write_ecm_vs_dt_figure(temp_path, phase6_ecm_rows(), (0.01, 0.001, 0.0001, 0.00001, 0.000001))
             summary = write_method_ranking_summary(temp_path / "system1_summary.md", phase6_ecm_rows())
 
             self.assertEqual("ecm_vs_dt.png", figure.name)
@@ -174,8 +178,30 @@ class AnalyzeSystem1Test(unittest.TestCase):
             self.assertGreater(figure.stat().st_size, 0)
             self.assertTrue(summary.exists())
             summary_text = summary.read_text(encoding="utf-8")
-            self.assertIn("Best method at dt=1e-05: gear5", summary_text)
-            self.assertIn("| gear5 | 1e-05 |", summary_text)
+            self.assertIn("Best method at dt=1e-06: gear5", summary_text)
+            self.assertIn("| gear5 | 1e-06 |", summary_text)
+
+    def test_ecm_vs_dt_plot_keeps_beeman_visible_when_close_to_verlet(self):
+        self.assertGreater(
+            ECM_PLOT_METHOD_ORDER.index("beeman"),
+            ECM_PLOT_METHOD_ORDER.index("verlet"),
+        )
+        self.assertNotEqual(
+            ECM_PLOT_STYLES["beeman"]["linestyle"],
+            ECM_PLOT_STYLES["verlet"]["linestyle"],
+        )
+        self.assertGreater(
+            ECM_PLOT_STYLES["beeman"]["zorder"],
+            ECM_PLOT_STYLES["verlet"]["zorder"],
+        )
+
+    def test_position_plot_uses_distinct_method_markers(self):
+        markers = [POSITION_PLOT_STYLES[method]["marker"] for method in POSITION_PLOT_METHOD_ORDER]
+        colors = [POSITION_PLOT_STYLES[method]["color"] for method in POSITION_PLOT_METHOD_ORDER]
+
+        self.assertEqual(len(markers), len(set(markers)))
+        self.assertEqual({"o", "s", "^", "x"}, set(markers))
+        self.assertEqual(len(colors), len(set(colors)))
 
     def test_manifest_records_phase6_figure_and_summary(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -185,7 +211,10 @@ class AnalyzeSystem1Test(unittest.TestCase):
                 manifest,
                 temp_path / "system1.csv",
                 temp_path / "system1_ecm.csv",
-                figure_paths=(temp_path / "system1_figures" / "system1_position_dt_0.01.png",),
+                figure_paths=(
+                    temp_path / "system1_figures" / "system1_position_dt_0.001.png",
+                    temp_path / "system1_figures" / "system1_position_dt_0.001_zoom.png",
+                ),
                 ecm_vs_dt_figure_path=temp_path / "system1_figures" / "ecm_vs_dt.png",
                 summary_path=temp_path / "system1_summary.md",
             )
@@ -196,7 +225,7 @@ class AnalyzeSystem1Test(unittest.TestCase):
 
 
 def phase6_ecm_rows() -> list[EcmRow]:
-    dts = (0.01, 0.001, 0.0001, 0.00001)
+    dts = (0.01, 0.001, 0.0001, 0.00001, 0.000001)
     final_ecm = {
         "gear5": 1.0e-20,
         "beeman": 1.0e-14,

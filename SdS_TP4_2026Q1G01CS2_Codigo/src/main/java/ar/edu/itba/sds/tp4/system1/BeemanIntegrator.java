@@ -1,7 +1,6 @@
 package ar.edu.itba.sds.tp4.system1;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.function.Consumer;
 
 public final class BeemanIntegrator implements Integrator {
     @Override
@@ -10,16 +9,15 @@ public final class BeemanIntegrator implements Integrator {
     }
 
     @Override
-    public List<OscillatorState> integrate(System1Parameters parameters, double dt) {
+    public void integrate(System1Parameters parameters, double dt, Consumer<OscillatorState> stateConsumer) {
         Oscillator oscillator = new Oscillator(parameters);
         int steps = (int) Math.round(parameters.finalTime() / dt);
-        List<OscillatorState> states = new ArrayList<>(steps + 1);
 
         double position = parameters.initialPosition();
         double velocity = parameters.initialVelocity();
         double acceleration = oscillator.acceleration(position, velocity);
         double previousAcceleration = previousAcceleration(parameters, dt, acceleration);
-        states.add(new OscillatorState(0.0, position, velocity));
+        stateConsumer.accept(new OscillatorState(0.0, position, velocity));
 
         for (int step = 0; step < steps; step++) {
             double nextPosition = position
@@ -36,15 +34,13 @@ public final class BeemanIntegrator implements Integrator {
                     - (1.0 / 6.0) * previousAcceleration * dt;
 
             double nextTime = (step + 1) * dt;
-            states.add(new OscillatorState(nextTime, nextPosition, correctedVelocity));
+            stateConsumer.accept(new OscillatorState(nextTime, nextPosition, correctedVelocity));
 
             position = nextPosition;
             velocity = correctedVelocity;
             previousAcceleration = acceleration;
             acceleration = nextAcceleration;
         }
-
-        return states;
     }
 
     private static double previousAcceleration(System1Parameters parameters, double dt, double currentAcceleration) {

@@ -19,7 +19,7 @@ public record System1Parameters(
     public static final double DEFAULT_FINAL_TIME = 5.0;
     public static final double DEFAULT_INITIAL_POSITION = 1.0;
     public static final double DEFAULT_INITIAL_VELOCITY = -DEFAULT_GAMMA / (2.0 * DEFAULT_MASS);
-    public static final List<Double> DEFAULT_DTS = List.of(0.01, 0.001, 0.0001, 0.00001);
+    public static final List<Double> DEFAULT_DTS = List.of(0.01, 0.001, 0.0001, 0.00001, 0.000001);
 
     private static final double INTEGER_TOLERANCE = 1e-9;
 

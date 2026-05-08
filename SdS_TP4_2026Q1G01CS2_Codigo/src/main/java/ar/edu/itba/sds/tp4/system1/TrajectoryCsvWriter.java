@@ -12,6 +12,27 @@ import java.util.stream.Collectors;
 
 public final class TrajectoryCsvWriter {
     public void write(Path outputPath, System1Parameters parameters, List<Row> rows) {
+        write(outputPath, parameters, writer -> {
+            for (Row row : rows) {
+                writeRow(writer, row);
+            }
+        });
+    }
+
+    public void writeIntegratedTrajectories(Path outputPath, System1Parameters parameters, List<Integrator> integrators) {
+        write(outputPath, parameters, writer -> {
+            for (Integrator integrator : integrators) {
+                for (double dt : parameters.dts()) {
+                    integrator.integrate(parameters, dt, state -> writeRowUnchecked(
+                            writer,
+                            new Row(integrator.methodName(), dt, state)
+                    ));
+                }
+            }
+        });
+    }
+
+    private void write(Path outputPath, System1Parameters parameters, ThrowingWriterConsumer rowWriter) {
         if (outputPath == null) {
             throw new IllegalArgumentException("output path must be present");
         }
@@ -24,10 +45,7 @@ public final class TrajectoryCsvWriter {
                 writeMetadata(writer, parameters);
                 writer.write("method,dt,time,x,v");
                 writer.newLine();
-                for (Row row : rows) {
-                    writer.write(formatRow(row));
-                    writer.newLine();
-                }
+                rowWriter.accept(writer);
             }
         } catch (IOException exception) {
             throw new UncheckedIOException("could not write trajectory CSV to " + outputPath, exception);
@@ -65,6 +83,24 @@ public final class TrajectoryCsvWriter {
                 Double.toString(row.state().position()),
                 Double.toString(row.state().velocity())
         );
+    }
+
+    private static void writeRow(BufferedWriter writer, Row row) throws IOException {
+        writer.write(formatRow(row));
+        writer.newLine();
+    }
+
+    private static void writeRowUnchecked(BufferedWriter writer, Row row) {
+        try {
+            writeRow(writer, row);
+        } catch (IOException exception) {
+            throw new UncheckedIOException(exception);
+        }
+    }
+
+    @FunctionalInterface
+    private interface ThrowingWriterConsumer {
+        void accept(BufferedWriter writer) throws IOException;
     }
 
     public record Row(String method, double dt, OscillatorState state) {

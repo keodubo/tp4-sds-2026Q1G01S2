@@ -1,7 +1,6 @@
 package ar.edu.itba.sds.tp4.system1;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.function.Consumer;
 
 public final class Gear5Integrator implements Integrator {
     private static final double[] ALPHA = {
@@ -20,22 +19,19 @@ public final class Gear5Integrator implements Integrator {
     }
 
     @Override
-    public List<OscillatorState> integrate(System1Parameters parameters, double dt) {
+    public void integrate(System1Parameters parameters, double dt, Consumer<OscillatorState> stateConsumer) {
         Oscillator oscillator = new Oscillator(parameters);
         int steps = (int) Math.round(parameters.finalTime() / dt);
-        List<OscillatorState> states = new ArrayList<>(steps + 1);
         double[] derivatives = initialDerivatives(parameters);
 
-        states.add(new OscillatorState(0.0, derivatives[0], derivatives[1]));
+        stateConsumer.accept(new OscillatorState(0.0, derivatives[0], derivatives[1]));
         for (int step = 0; step < steps; step++) {
             double[] predicted = predict(derivatives, dt);
             double evaluatedAcceleration = oscillator.acceleration(predicted[0], predicted[1]);
             double deltaR2 = (evaluatedAcceleration - predicted[2]) * dt * dt / 2.0;
             derivatives = correct(predicted, deltaR2, dt);
-            states.add(new OscillatorState((step + 1) * dt, derivatives[0], derivatives[1]));
+            stateConsumer.accept(new OscillatorState((step + 1) * dt, derivatives[0], derivatives[1]));
         }
-
-        return states;
     }
 
     static double[] initialDerivatives(System1Parameters parameters) {
