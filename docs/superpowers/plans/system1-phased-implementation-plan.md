@@ -326,7 +326,8 @@ contains one row per `(method, dt)`.
 **Checklist:**
 
 - [ ] Generate position comparison figures from Java CSV plus reconstructed analytical solution.
-- [ ] Use one representative `dt` for readable analytical-vs-numerical plots, likely `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
+- [ ] Use one representative `dt` for readable analytical-vs-numerical plots, defaulting to `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
+- [ ] Do not use `dt=0.1` as the default visual comparison because Gear 5 can diverge at that coarse step; keep it in the ECM dataset as stability/error evidence.
 - [ ] Include all four methods in the comparison, either as separate plots or a clear combined plot.
 - [ ] Add every generated analytical-vs-numerical figure to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.2`, `artifact_type=figure`.
 - [ ] Keep generated figures out of the Java code ZIP.
@@ -369,6 +370,7 @@ outputs/system1_outputs_manifest.csv
 **Checklist:**
 
 - [ ] Use ECM rows for all default `dt`: `0.1`, `0.01`, `0.001`, `0.0001`.
+- [ ] Preserve `dt=0.1` in the log-log ECM study even if it is an outlier, and call out any divergence explicitly in the generated summary rather than filtering it silently.
 - [ ] If the log-log trend is not clear enough, rerun Java with additional positive `dt` values that divide `tf` exactly and include them in the ECM CSV.
 - [ ] Plot `ECM` vs `dt` on logarithmic axes.
 - [ ] Include all four methods in the same figure for comparison.

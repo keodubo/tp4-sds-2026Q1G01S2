@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class System1Command {
+    private static final long MAX_OUTPUT_ROWS = 1_000_000L;
+
     public void run(String[] args) {
         ParsedArgs parsedArgs = parse(args);
         if (parsedArgs.help()) {
@@ -16,11 +18,17 @@ public final class System1Command {
         }
 
         System1Parameters parameters = parsedArgs.toParameters();
-        List<TrajectoryCsvWriter.Row> rows = buildRows(parameters, List.of(new EulerIntegrator()));
+        List<Integrator> integrators = List.of(
+                new EulerIntegrator(),
+                new VerletIntegrator(),
+                new BeemanIntegrator(),
+                new Gear5Integrator()
+        );
+        validateOutputRowBudget(parameters, integrators.size());
+        List<TrajectoryCsvWriter.Row> rows = buildRows(parameters, integrators);
         new TrajectoryCsvWriter().write(parsedArgs.outputPath(), parameters, rows);
         System.out.println("System 1 parameters validated.");
-        System.out.println("Wrote System 1 Euler trajectory CSV to " + parsedArgs.outputPath());
-        System.out.println("Remaining required methods are intentionally deferred to the next phase.");
+        System.out.println("Wrote System 1 trajectory CSV to " + parsedArgs.outputPath());
     }
 
     public static String usage() {
@@ -95,6 +103,24 @@ public final class System1Command {
             }
         }
         return rows;
+    }
+
+    static void validateOutputRowBudget(System1Parameters parameters, int integratorCount) {
+        long rows = estimateOutputRows(parameters, integratorCount);
+        if (rows > MAX_OUTPUT_ROWS) {
+            throw new IllegalArgumentException("too many output rows: " + rows
+                    + " exceeds limit " + MAX_OUTPUT_ROWS
+                    + "; use a larger --dt sweep or a shorter --tf");
+        }
+    }
+
+    private static long estimateOutputRows(System1Parameters parameters, int integratorCount) {
+        long rowsPerIntegrator = 0L;
+        for (double dt : parameters.dts()) {
+            long steps = Math.round(parameters.finalTime() / dt);
+            rowsPerIntegrator = Math.addExact(rowsPerIntegrator, steps + 1L);
+        }
+        return Math.multiplyExact(rowsPerIntegrator, integratorCount);
     }
 
     private record ParsedArgs(
