@@ -12,6 +12,8 @@ Postprocessing for TP4 System 1 lives here and stays independent from the Java s
 - `outputs/system1_ecm.csv`: one ECM row per `(method, dt)`.
 - `outputs/system1_figures/system1_position_dt_0.01.png`: analytical vs numerical position comparison for `dt=0.01`.
 - `outputs/system1_figures/system1_position_dt_0.001.png`: analytical vs numerical position comparison for `dt=0.001`.
+- `outputs/system1_figures/ecm_vs_dt.png`: log-log ECM vs `dt` comparison for all System 1 methods.
+- `outputs/system1_summary.md`: compact method ranking at the smallest generated `dt`.
 - `outputs/system1_outputs_manifest.csv`: maps generated artifacts to TP4 incisos.
 
 ## Commands
@@ -35,6 +37,17 @@ python3 analysis-python/system1/analyze_system1.py \
 
 The `--figure-dt` values must already exist in the Java trajectory CSV. Rerun the Java command with the desired `--dt` values before requesting additional figures.
 
+Generate the full System 1 item `1.3` ECM-vs-`dt` study and method ranking:
+
+```bash
+python3 analysis-python/system1/analyze_system1.py \
+  --input outputs/system1.csv \
+  --ecm-output outputs/system1_ecm.csv \
+  --figures-dir outputs/system1_figures \
+  --figure-dt 0.01,0.001 \
+  --summary-output outputs/system1_summary.md
+```
+
 Run the lightweight analysis tests:
 
 ```bash
@@ -43,4 +56,4 @@ python3 -m unittest discover -s analysis-python/system1 -p 'test_*.py'
 
 ## Scope
 
-This phase computes analytical position and velocity, position ECM, and analytical-vs-numerical figures from existing Java output.
+This phase computes analytical position and velocity, position ECM, analytical-vs-numerical figures, ECM-vs-`dt` analysis, and method ranking from existing Java output.

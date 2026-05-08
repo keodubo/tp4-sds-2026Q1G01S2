@@ -7,10 +7,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analyze_system1 import (
+    EcmRow,
     PhysicalParameters,
     TrajectoryRow,
     analytical_state,
     compute_ecm,
+    rank_methods_at_smallest_dt,
+    validate_ecm_grid,
+    write_ecm_vs_dt_figure,
+    write_manifest,
+    write_method_ranking_summary,
     write_position_figures,
 )
 
@@ -136,6 +142,79 @@ class AnalyzeSystem1Test(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaisesRegex(ValueError, "0.001"):
                 write_position_figures(Path(temp_dir), rows, params, (0.01, 0.001))
+
+    def test_ecm_grid_requires_every_method_for_every_default_dt(self):
+        ecm_rows = phase6_ecm_rows()
+
+        validate_ecm_grid(ecm_rows, (0.01, 0.001, 0.0001, 0.00001))
+
+        incomplete_rows = [
+            row
+            for row in ecm_rows
+            if not (row.method == "verlet" and math.isclose(row.dt, 0.00001))
+        ]
+        with self.assertRaisesRegex(ValueError, "verlet.*1e-05"):
+            validate_ecm_grid(incomplete_rows, (0.01, 0.001, 0.0001, 0.00001))
+
+    def test_method_ranking_uses_lowest_ecm_at_smallest_dt(self):
+        ranking = rank_methods_at_smallest_dt(phase6_ecm_rows())
+
+        self.assertEqual("gear5", ranking[0].method)
+        self.assertEqual(0.00001, ranking[0].dt)
+        self.assertEqual(["gear5", "beeman", "verlet", "euler"], [row.method for row in ranking])
+
+    def test_ecm_vs_dt_figure_and_method_summary_are_generated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            figure = write_ecm_vs_dt_figure(temp_path, phase6_ecm_rows(), (0.01, 0.001, 0.0001, 0.00001))
+            summary = write_method_ranking_summary(temp_path / "system1_summary.md", phase6_ecm_rows())
+
+            self.assertEqual("ecm_vs_dt.png", figure.name)
+            self.assertTrue(figure.exists())
+            self.assertGreater(figure.stat().st_size, 0)
+            self.assertTrue(summary.exists())
+            summary_text = summary.read_text(encoding="utf-8")
+            self.assertIn("Best method at dt=1e-05: gear5", summary_text)
+            self.assertIn("| gear5 | 1e-05 |", summary_text)
+
+    def test_manifest_records_phase6_figure_and_summary(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            manifest = temp_path / "manifest.csv"
+            write_manifest(
+                manifest,
+                temp_path / "system1.csv",
+                temp_path / "system1_ecm.csv",
+                figure_paths=(temp_path / "system1_figures" / "system1_position_dt_0.01.png",),
+                ecm_vs_dt_figure_path=temp_path / "system1_figures" / "ecm_vs_dt.png",
+                summary_path=temp_path / "system1_summary.md",
+            )
+
+            manifest_text = manifest.read_text(encoding="utf-8")
+            self.assertIn("1,1.3,figure", manifest_text)
+            self.assertIn("1,1.3,summary", manifest_text)
+
+
+def phase6_ecm_rows() -> list[EcmRow]:
+    dts = (0.01, 0.001, 0.0001, 0.00001)
+    final_ecm = {
+        "gear5": 1.0e-20,
+        "beeman": 1.0e-14,
+        "verlet": 2.0e-14,
+        "euler": 1.0e-7,
+    }
+    rows = []
+    for method, smallest_ecm in final_ecm.items():
+        for index, dt in enumerate(dts):
+            rows.append(
+                EcmRow(
+                    method=method,
+                    dt=dt,
+                    rows=int(5 / dt) + 1,
+                    ecm=smallest_ecm * (10 ** (len(dts) - index - 1)),
+                )
+            )
+    return rows
 
 
 if __name__ == "__main__":

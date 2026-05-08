@@ -45,6 +45,9 @@ class EcmRow:
     ecm: float
 
 
+REQUIRED_SYSTEM1_METHODS = ("beeman", "euler", "gear5", "verlet")
+
+
 def analytical_state(time: float, params: PhysicalParameters) -> AnalyticalState:
     beta = params.gamma / (2.0 * params.mass)
     omega_squared = params.spring_constant / params.mass - beta * beta
@@ -217,11 +220,113 @@ def write_position_figures(
     return generated
 
 
+def validate_ecm_grid(
+    ecm_rows: Iterable[EcmRow],
+    required_dts: tuple[float, ...],
+    required_methods: tuple[str, ...] = REQUIRED_SYSTEM1_METHODS,
+) -> None:
+    rows = list(ecm_rows)
+    missing = []
+    for method in required_methods:
+        for required_dt in required_dts:
+            has_row = any(
+                row.method == method
+                and math.isclose(row.dt, required_dt, rel_tol=1e-12, abs_tol=1e-15)
+                for row in rows
+            )
+            if not has_row:
+                missing.append(f"{method}@dt={format_float(required_dt)}")
+
+    if missing:
+        raise ValueError(
+            "ECM rows missing required method/dt combinations: " + ", ".join(missing)
+        )
+
+
+def rank_methods_at_smallest_dt(ecm_rows: Iterable[EcmRow]) -> list[EcmRow]:
+    rows = list(ecm_rows)
+    if not rows:
+        raise ValueError("cannot rank methods without ECM rows")
+
+    smallest_dt = min(row.dt for row in rows)
+    ranking_rows = [
+        row for row in rows if math.isclose(row.dt, smallest_dt, rel_tol=1e-12, abs_tol=1e-15)
+    ]
+    return sorted(ranking_rows, key=lambda row: (row.ecm, row.method))
+
+
+def write_ecm_vs_dt_figure(
+    figures_dir: Path,
+    ecm_rows: Iterable[EcmRow],
+    required_dts: tuple[float, ...],
+) -> Path:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    rows = list(ecm_rows)
+    validate_ecm_grid(rows, required_dts)
+
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    fig, axis = plt.subplots(figsize=(8, 5))
+    for method in REQUIRED_SYSTEM1_METHODS:
+        method_rows = sorted(
+            (row for row in rows if row.method == method),
+            key=lambda row: row.dt,
+        )
+        axis.loglog(
+            [row.dt for row in method_rows],
+            [row.ecm for row in method_rows],
+            marker="o",
+            linewidth=1.4,
+            label=method,
+        )
+
+    axis.set_title("System 1 ECM vs dt")
+    axis.set_xlabel("dt (s)")
+    axis.set_ylabel("ECM")
+    axis.grid(True, which="both", linestyle="--", alpha=0.35)
+    axis.legend()
+    fig.tight_layout()
+
+    output_path = figures_dir / "ecm_vs_dt.png"
+    fig.savefig(output_path, dpi=150)
+    plt.close(fig)
+    return output_path
+
+
+def write_method_ranking_summary(path: Path, ecm_rows: Iterable[EcmRow]) -> Path:
+    ranking = rank_methods_at_smallest_dt(ecm_rows)
+    if not ranking:
+        raise ValueError("cannot write ranking summary without ECM rows")
+
+    best = ranking[0]
+    lines = [
+        "# System 1 Method Ranking",
+        "",
+        f"Best method at dt={format_float(best.dt)}: {best.method}",
+        "",
+        "| method | dt | rows | ECM |",
+        "|---|---:|---:|---:|",
+    ]
+    for row in ranking:
+        lines.append(
+            f"| {row.method} | {format_float(row.dt)} | {row.rows} | {format_float(row.ecm)} |"
+        )
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
 def write_manifest(
     path: Path,
     trajectory_path: Path,
     ecm_path: Path,
     figure_paths: Iterable[Path] = (),
+    ecm_vs_dt_figure_path: Path | None = None,
+    summary_path: Path | None = None,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="", encoding="utf-8") as output_file:
@@ -258,6 +363,26 @@ def write_manifest(
                     "description": "Analytical vs numerical position comparison for System 1.",
                 }
             )
+        if ecm_vs_dt_figure_path:
+            writer.writerow(
+                {
+                    "system": "1",
+                    "inciso": "1.3",
+                    "artifact_type": "figure",
+                    "path": normalize_output_path(ecm_vs_dt_figure_path),
+                    "description": "Log-log ECM vs dt comparison for all System 1 integration methods.",
+                }
+            )
+        if summary_path:
+            writer.writerow(
+                {
+                    "system": "1",
+                    "inciso": "1.3",
+                    "artifact_type": "summary",
+                    "path": normalize_output_path(summary_path),
+                    "description": "Method ranking by lowest ECM at the smallest generated dt.",
+                }
+            )
 
 
 def normalize_output_path(path: Path) -> str:
@@ -286,6 +411,11 @@ def parse_args() -> argparse.Namespace:
         default="0.01,0.001",
         help="Comma-separated dt values to plot when --figures-dir is provided. Defaults to 0.01,0.001.",
     )
+    parser.add_argument(
+        "--summary-output",
+        type=Path,
+        help="Optional Markdown summary for the System 1 ECM-vs-dt method ranking.",
+    )
     return parser.parse_args()
 
 
@@ -300,11 +430,29 @@ def main() -> None:
     if args.figures_dir:
         figure_dts = tuple(float(value.strip()) for value in args.figure_dt.split(",") if value.strip())
         figure_paths = write_position_figures(args.figures_dir, rows, params, figure_dts)
-    write_manifest(manifest_output, args.input, args.ecm_output, figure_paths)
+    ecm_vs_dt_figure_path = None
+    summary_path = None
+    if args.summary_output:
+        validate_ecm_grid(ecm_rows, params.dts)
+        if args.figures_dir:
+            ecm_vs_dt_figure_path = write_ecm_vs_dt_figure(args.figures_dir, ecm_rows, params.dts)
+        summary_path = write_method_ranking_summary(args.summary_output, ecm_rows)
+    write_manifest(
+        manifest_output,
+        args.input,
+        args.ecm_output,
+        figure_paths,
+        ecm_vs_dt_figure_path=ecm_vs_dt_figure_path,
+        summary_path=summary_path,
+    )
 
     print(args.ecm_output)
     for figure_path in figure_paths:
         print(figure_path)
+    if ecm_vs_dt_figure_path:
+        print(ecm_vs_dt_figure_path)
+    if summary_path:
+        print(summary_path)
     print(manifest_output)
 
 
