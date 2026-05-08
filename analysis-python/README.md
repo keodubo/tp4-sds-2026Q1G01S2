@@ -9,4 +9,4 @@ Planned responsibilities:
 - generate animations or MP4 files from simulation snapshots;
 - keep exploratory notebooks or scripts out of the final Java engine zip.
 
-Do not put simulation-engine logic here. The authoritative TP4 motor should live under `engine-java/`.
+Do not put simulation-engine logic here. The authoritative TP4 motor should live under `SdS_TP4_2026Q1G01CS2_Codigo/`.

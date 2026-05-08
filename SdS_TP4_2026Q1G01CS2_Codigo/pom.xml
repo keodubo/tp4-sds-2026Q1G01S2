@@ -5,9 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>ar.edu.itba.sds</groupId>
-    <artifactId>tp4-engine</artifactId>
+    <artifactId>SdS_TP4_2026Q1G01CS2_Codigo</artifactId>
     <version>0.1.0-SNAPSHOT</version>
-    <name>SdS TP4 Simulation Engine</name>
+    <name>SdS TP4 2026Q1 G01 CS2 Codigo</name>
 
     <properties>
         <maven.compiler.release>21</maven.compiler.release>

@@ -32,7 +32,8 @@ The TP4 enunciado requires both systems:
 
 ## Java Engine Conventions
 
-- Maven project lives in `engine-java/`.
+- Maven project lives in `SdS_TP4_2026Q1G01CS2_Codigo/`.
+- This folder name intentionally matches the final campus code deliverable.
 - Main package starts at `ar.edu.itba.sds.tp4`.
 - Keep shared primitives and output contracts under `common`.
 - Keep System 1 code under `system1`.
@@ -50,17 +51,17 @@ Generated files should go under ignored output folders, not into the final code 
 For scaffold or Java changes, run:
 
 ```bash
-cd engine-java
+cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn test
 ```
 
 For executable-entrypoint changes, also run:
 
 ```bash
-cd engine-java
+cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn exec:java
 ```
 
 ## Delivery Notes
 
-The final campus code zip should contain only the final simulation motor source code. It should not include generated outputs, figures, animations, presentation files, or exploratory scripts.
+The final campus code zip should be named `SdS_TP4_2026Q1G01CS2_Codigo.zip` and should contain only the final simulation motor source code. It should not include generated outputs, figures, animations, presentation files, or exploratory scripts.
