@@ -18,7 +18,7 @@ class System1ParametersTest {
         assertEquals(5.0, parameters.finalTime());
         assertEquals(1.0, parameters.initialPosition());
         assertEquals(-100.0 / (2.0 * 70.0), parameters.initialVelocity());
-        assertEquals(List.of(0.1, 0.01, 0.001, 0.0001), parameters.dts());
+        assertEquals(List.of(0.01, 0.001, 0.0001, 0.00001), parameters.dts());
     }
 
     @Test
@@ -32,8 +32,8 @@ class System1ParametersTest {
     @Test
     void rejectsInvalidDtSweep() {
         assertThrows(IllegalArgumentException.class, () -> parametersWithDts(List.of()));
-        assertThrows(IllegalArgumentException.class, () -> parametersWithDts(List.of(0.1, 0.0)));
-        assertThrows(IllegalArgumentException.class, () -> parametersWithDts(List.of(0.1, 0.1)));
+        assertThrows(IllegalArgumentException.class, () -> parametersWithDts(List.of(0.01, 0.0)));
+        assertThrows(IllegalArgumentException.class, () -> parametersWithDts(List.of(0.01, 0.01)));
         assertThrows(IllegalArgumentException.class, () -> parametersWithDts(List.of(0.3)));
     }
 

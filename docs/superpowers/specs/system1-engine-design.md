@@ -71,7 +71,7 @@ v(0) = -A * gamma / (2m) = -0.7142857142857143 m/s
 Default integration steps are a project experimental sweep chosen to satisfy the enunciado requirement to study decreasing `dt`; the course statement does not mandate these exact values:
 
 ```text
-dt = 0.1, 0.01, 0.001, 0.0001
+dt = 0.01, 0.001, 0.0001, 0.00001
 ```
 
 The equation of motion is:
@@ -98,7 +98,7 @@ Fully explicit equivalent:
 
 ```bash
 cd SdS_TP4_2026Q1G01CS2_Codigo
-mvn exec:java -Dexec.args="system1 --m 70 --k 10000 --gamma 100 --tf 5 --x0 1 --v0 -0.7142857142857143 --dt 0.1,0.01,0.001,0.0001 --output ../outputs/system1.csv"
+mvn exec:java -Dexec.args="system1 --m 70 --k 10000 --gamma 100 --tf 5 --x0 1 --v0 -0.7142857142857143 --dt 0.01,0.001,0.0001,0.00001 --output ../outputs/system1.csv"
 ```
 
 Validation happens automatically before running. There is no separate `validate` subcommand in this phase.
@@ -131,12 +131,12 @@ Example:
 # tf=5.0
 # x0=1.0
 # v0=-0.7142857142857143
-# dts=0.1,0.01,0.001,0.0001
+# dts=0.01,0.001,0.0001,0.00001
 method,dt,time,x,v
-euler,0.1,0.0,1.0,-0.7142857142857143
-verlet,0.1,0.0,1.0,-0.7142857142857143
-beeman,0.1,0.0,1.0,-0.7142857142857143
-gear5,0.1,0.0,1.0,-0.7142857142857143
+euler,0.01,0.0,1.0,-0.7142857142857143
+verlet,0.01,0.0,1.0,-0.7142857142857143
+beeman,0.01,0.0,1.0,-0.7142857142857143
+gear5,0.01,0.0,1.0,-0.7142857142857143
 ```
 
 Method names are fixed:
@@ -188,6 +188,7 @@ ECM(method, dt) = sum((x_numeric - x_analytical)^2) / number_of_steps
 The analysis must generate:
 
 - at least one analytical-vs-numerical position comparison figure that includes all four methods clearly
+- default analytical-vs-numerical position comparison figures for `dt = 0.01` and `dt = 0.001`
 - an ECM table with one row per `(method, dt)`
 - one log-log `ECM` vs `dt` figure containing all four methods
 - a reproducible text or CSV summary that identifies the best scheme from the generated ECM data

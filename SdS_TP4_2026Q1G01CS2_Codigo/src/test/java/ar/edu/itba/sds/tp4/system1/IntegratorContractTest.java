@@ -23,7 +23,7 @@ class IntegratorContractTest {
 
     @Test
     void integratorsReturnStatesFromZeroThroughFinalTimeInclusive() {
-        System1Parameters parameters = shortRunParameters(0.2, List.of(0.1));
+        System1Parameters parameters = shortRunParameters(0.02, List.of(0.01));
         List<Integrator> integrators = List.of(
                 new EulerIntegrator(),
                 new VerletIntegrator(),
@@ -32,12 +32,12 @@ class IntegratorContractTest {
         );
 
         for (Integrator integrator : integrators) {
-            List<OscillatorState> states = integrator.integrate(parameters, 0.1);
+            List<OscillatorState> states = integrator.integrate(parameters, 0.01);
 
             assertEquals(3, states.size(), integrator.methodName());
             assertEquals(0.0, states.get(0).time(), integrator.methodName());
-            assertEquals(0.1, states.get(1).time(), 1e-12, integrator.methodName());
-            assertEquals(0.2, states.get(2).time(), 1e-12, integrator.methodName());
+            assertEquals(0.01, states.get(1).time(), 1e-12, integrator.methodName());
+            assertEquals(0.02, states.get(2).time(), 1e-12, integrator.methodName());
             assertEquals(parameters.initialPosition(), states.get(0).position(), integrator.methodName());
         }
     }
@@ -48,18 +48,18 @@ class IntegratorContractTest {
                 2.0,
                 4.0,
                 1.0,
-                0.1,
+                0.01,
                 3.0,
                 -2.0,
-                List.of(0.1)
+                List.of(0.01)
         );
         Integrator integrator = new EulerIntegrator();
 
-        OscillatorState nextState = integrator.integrate(parameters, 0.1).get(1);
+        OscillatorState nextState = integrator.integrate(parameters, 0.01).get(1);
 
-        assertEquals(0.1, nextState.time(), 1e-12);
-        assertEquals(2.775, nextState.position(), 1e-12);
-        assertEquals(-2.5, nextState.velocity(), 1e-12);
+        assertEquals(0.01, nextState.time(), 1e-12);
+        assertEquals(2.97975, nextState.position(), 1e-12);
+        assertEquals(-2.05, nextState.velocity(), 1e-12);
     }
 
     @Test
@@ -68,13 +68,13 @@ class IntegratorContractTest {
                 2.0,
                 4.0,
                 1.0,
-                0.1,
+                0.01,
                 3.0,
                 -2.0,
-                List.of(0.1)
+                List.of(0.01)
         );
         Oscillator oscillator = new Oscillator(parameters);
-        double dt = 0.1;
+        double dt = 0.01;
         double initialAcceleration = oscillator.acceleration(parameters.initialPosition(), parameters.initialVelocity());
         double previousPosition = parameters.initialPosition()
                 - parameters.initialVelocity() * dt
@@ -95,12 +95,12 @@ class IntegratorContractTest {
                 2.0,
                 4.0,
                 1.0,
-                0.2,
+                0.02,
                 3.0,
                 -2.0,
-                List.of(0.1)
+                List.of(0.01)
         );
-        double dt = 0.1;
+        double dt = 0.01;
         Oscillator oscillator = new Oscillator(parameters);
         double initialAcceleration = oscillator.acceleration(parameters.initialPosition(), parameters.initialVelocity());
         double previousPosition = parameters.initialPosition()
@@ -113,7 +113,7 @@ class IntegratorContractTest {
 
         List<OscillatorState> states = new VerletIntegrator().integrate(parameters, dt);
 
-        assertEquals(0.2, states.get(2).time(), 1e-12);
+        assertEquals(0.02, states.get(2).time(), 1e-12);
         assertEquals(expectedFinalVelocity, states.get(2).velocity(), 1e-12);
     }
 
@@ -123,17 +123,17 @@ class IntegratorContractTest {
                 2.0,
                 4.0,
                 1.0,
-                0.1,
+                0.01,
                 3.0,
                 -2.0,
-                List.of(0.1)
+                List.of(0.01)
         );
 
-        OscillatorState nextState = new BeemanIntegrator().integrate(parameters, 0.1).get(1);
+        OscillatorState nextState = new BeemanIntegrator().integrate(parameters, 0.01).get(1);
 
         assertEquals("beeman", new BeemanIntegrator().methodName());
-        assertEquals(2.776, nextState.position(), 1e-12);
-        assertEquals(-2.4672333333333334, nextState.velocity(), 1e-12);
+        assertEquals(2.979751075, nextState.position(), 1e-12);
+        assertEquals(-2.049674711333333, nextState.velocity(), 1e-12);
     }
 
     @Test
@@ -142,17 +142,17 @@ class IntegratorContractTest {
                 2.0,
                 4.0,
                 1.0,
-                0.1,
+                0.01,
                 3.0,
                 -2.0,
-                List.of(0.1)
+                List.of(0.01)
         );
 
-        OscillatorState nextState = new Gear5Integrator().integrate(parameters, 0.1).get(1);
+        OscillatorState nextState = new Gear5Integrator().integrate(parameters, 0.01).get(1);
 
         assertEquals("gear5", new Gear5Integrator().methodName());
-        assertEquals(2.7761100755566406, nextState.position(), 1e-12);
-        assertEquals(-2.4664439056614584, nextState.velocity(), 1e-10);
+        assertEquals(2.979751086132167, nextState.position(), 1e-12);
+        assertEquals(-2.0496738818305382, nextState.velocity(), 1e-12);
     }
 
     @Test
@@ -161,10 +161,10 @@ class IntegratorContractTest {
                 2.0,
                 4.0,
                 1.0,
-                0.1,
+                0.01,
                 3.0,
                 -2.0,
-                List.of(0.1)
+                List.of(0.01)
         );
 
         double[] derivatives = Gear5Integrator.initialDerivatives(parameters);
@@ -177,16 +177,16 @@ class IntegratorContractTest {
     }
 
     @Test
-    void system1CommandWritesAllRequiredMethodsForEveryDefaultDt() throws IOException {
+    void system1CommandWritesAllRequiredMethodsForSelectedStableDts() throws IOException {
         Path outputPath = tempDir.resolve("system1.csv");
 
-        new System1Command().run(new String[]{"--output", outputPath.toString()});
+        new System1Command().run(new String[]{"--dt", "0.01,0.001", "--tf", "0.02", "--output", outputPath.toString()});
 
         List<String> dataRows = Files.readAllLines(outputPath).stream()
                 .filter(line -> !line.startsWith("#"))
                 .skip(1)
                 .toList();
-        assertEquals(222_216, dataRows.size());
+        assertEquals(96, dataRows.size());
 
         Set<String> methods = new HashSet<>();
         Map<String, Integer> rowsByMethodAndDt = new HashMap<>();
@@ -198,11 +198,17 @@ class IntegratorContractTest {
 
         assertEquals(Set.of("euler", "verlet", "beeman", "gear5"), methods);
         for (String method : methods) {
-            assertEquals(51, rowsByMethodAndDt.get(method + ":0.1"), method);
-            assertEquals(501, rowsByMethodAndDt.get(method + ":0.01"), method);
-            assertEquals(5_001, rowsByMethodAndDt.get(method + ":0.001"), method);
-            assertEquals(50_001, rowsByMethodAndDt.get(method + ":1.0E-4"), method);
+            assertEquals(3, rowsByMethodAndDt.get(method + ":0.01"), method);
+            assertEquals(21, rowsByMethodAndDt.get(method + ":0.001"), method);
         }
+    }
+
+    @Test
+    void defaultSweepHasFourStableOrdersAndFitsTheOutputBudget() {
+        System1Parameters parameters = System1Parameters.defaults();
+
+        assertEquals(List.of(0.01, 0.001, 0.0001, 0.00001), parameters.dts());
+        assertEquals(2_222_016L, System1Command.estimateOutputRows(parameters, 4));
     }
 
     @Test
@@ -212,7 +218,7 @@ class IntegratorContractTest {
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
                 new System1Command().run(new String[]{
                         "--tf", "1",
-                        "--dt", "0.000002",
+                        "--dt", "0.000001",
                         "--output", outputPath.toString()
                 })
         );

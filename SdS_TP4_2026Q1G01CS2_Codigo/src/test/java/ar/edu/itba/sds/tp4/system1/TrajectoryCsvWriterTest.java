@@ -19,7 +19,7 @@ class TrajectoryCsvWriterTest {
         Path outputPath = tempDir.resolve("system1.csv");
         System1Parameters parameters = System1Parameters.defaults();
         List<TrajectoryCsvWriter.Row> rows = List.of(
-                new TrajectoryCsvWriter.Row("euler", 0.1, new OscillatorState(0.0, 1.0, parameters.initialVelocity()))
+                new TrajectoryCsvWriter.Row("euler", 0.01, new OscillatorState(0.0, 1.0, parameters.initialVelocity()))
         );
 
         new TrajectoryCsvWriter().write(outputPath, parameters, rows);
@@ -32,8 +32,8 @@ class TrajectoryCsvWriterTest {
         assertEquals("# tf=5.0", lines.get(4));
         assertEquals("# x0=1.0", lines.get(5));
         assertEquals("# v0=-0.7142857142857143", lines.get(6));
-        assertEquals("# dts=0.1,0.01,0.001,1.0E-4", lines.get(7));
+        assertEquals("# dts=0.01,0.001,1.0E-4,1.0E-5", lines.get(7));
         assertEquals("method,dt,time,x,v", lines.get(8));
-        assertEquals("euler,0.1,0.0,1.0,-0.7142857142857143", lines.get(9));
+        assertEquals("euler,0.01,0.0,1.0,-0.7142857142857143", lines.get(9));
     }
 }

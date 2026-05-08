@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class System1Command {
-    private static final long MAX_OUTPUT_ROWS = 1_000_000L;
+    private static final long MAX_OUTPUT_ROWS = 3_000_000L;
 
     public void run(String[] args) {
         ParsedArgs parsedArgs = parse(args);
@@ -37,7 +37,7 @@ public final class System1Command {
                   system1 --output <path> [--m <mass>] [--k <spring>] [--gamma <damping>] [--tf <seconds>] [--x0 <position>] [--v0 <velocity>] [--dt <csv>]
 
                 Defaults:
-                  --m 70 --k 10000 --gamma 100 --tf 5 --x0 1 --v0 -0.7142857142857143 --dt 0.1,0.01,0.001,0.0001
+                  --m 70 --k 10000 --gamma 100 --tf 5 --x0 1 --v0 -0.7142857142857143 --dt 0.01,0.001,0.0001,0.00001
                 """;
     }
 
@@ -114,7 +114,7 @@ public final class System1Command {
         }
     }
 
-    private static long estimateOutputRows(System1Parameters parameters, int integratorCount) {
+    static long estimateOutputRows(System1Parameters parameters, int integratorCount) {
         long rowsPerIntegrator = 0L;
         for (double dt : parameters.dts()) {
             long steps = Math.round(parameters.finalTime() / dt);

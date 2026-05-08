@@ -86,7 +86,7 @@ BUILD SUCCESS
 
 - [ ] Add JUnit 5 as a test dependency only.
 - [ ] Implement default parameters from slide 36: `m=70`, `k=10000`, `gamma=100`, `tf=5`, `x0=1`, `v0=-gamma/(2m)`.
-- [ ] Implement default `dt` sweep: `0.1,0.01,0.001,0.0001`. Treat these as the group's reproducible experimental sweep for item `1.3`, not as values mandated verbatim by the catedra.
+- [ ] Implement default `dt` sweep: `0.01,0.001,0.0001,0.00001`. Treat these as the group's reproducible experimental sweep for item `1.3`, not as values mandated verbatim by the catedra.
 - [ ] Validate `m > 0`, `k > 0`, `gamma >= 0`, `tf > 0`, each `dt > 0`, no duplicate `dt`, and integer `tf/dt`.
 - [ ] Implement oscillator acceleration `a(x,v)=(-k*x-gamma*v)/m`.
 - [ ] Implement CSV metadata and columns: `method,dt,time,x,v`.
@@ -151,7 +151,7 @@ v(t+dt) = v(t) + a(t)*dt
 ```bash
 cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn test
-mvn exec:java -Dexec.args="system1 --dt 0.1 --output ../outputs/system1-euler-smoke.csv"
+mvn exec:java -Dexec.args="system1 --dt 0.01 --output ../outputs/system1-euler-smoke.csv"
 ```
 
 Expected result:
@@ -326,8 +326,7 @@ contains one row per `(method, dt)`.
 **Checklist:**
 
 - [ ] Generate position comparison figures from Java CSV plus reconstructed analytical solution.
-- [ ] Use one representative `dt` for readable analytical-vs-numerical plots, defaulting to `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
-- [ ] Do not use `dt=0.1` as the default visual comparison because Gear 5 can diverge at that coarse step; keep it in the ECM dataset as stability/error evidence.
+- [ ] Generate readable analytical-vs-numerical plots for `dt=0.01` and `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
 - [ ] Include all four methods in the comparison, either as separate plots or a clear combined plot.
 - [ ] Add every generated analytical-vs-numerical figure to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.2`, `artifact_type=figure`.
 - [ ] Keep generated figures out of the Java code ZIP.
@@ -342,7 +341,7 @@ contains one row per `(method, dt)`.
 **Verification command:**
 
 ```bash
-python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures
+python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --figure-dt 0.01,0.001
 ```
 
 Expected result:
@@ -369,8 +368,7 @@ outputs/system1_outputs_manifest.csv
 
 **Checklist:**
 
-- [ ] Use ECM rows for all default `dt`: `0.1`, `0.01`, `0.001`, `0.0001`.
-- [ ] Preserve `dt=0.1` in the log-log ECM study even if it is an outlier, and call out any divergence explicitly in the generated summary rather than filtering it silently.
+- [ ] Use ECM rows for all default `dt`: `0.01`, `0.001`, `0.0001`, `0.00001`.
 - [ ] If the log-log trend is not clear enough, rerun Java with additional positive `dt` values that divide `tf` exactly and include them in the ECM CSV.
 - [ ] Plot `ECM` vs `dt` on logarithmic axes.
 - [ ] Include all four methods in the same figure for comparison.
@@ -389,7 +387,7 @@ outputs/system1_outputs_manifest.csv
 **Verification command:**
 
 ```bash
-python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --summary-output outputs/system1_summary.md
+python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --figure-dt 0.01,0.001 --summary-output outputs/system1_summary.md
 ```
 
 Expected result:
@@ -431,7 +429,7 @@ cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn test
 mvn exec:java -Dexec.args="system1 --output ../outputs/system1.csv"
 cd ..
-python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --summary-output outputs/system1_summary.md
+python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --figure-dt 0.01,0.001 --summary-output outputs/system1_summary.md
 ```
 
 Expected result:
