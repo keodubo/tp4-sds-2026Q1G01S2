@@ -4,3 +4,10 @@
 # Temp files
 /tmp
 
+# Java build outputs
+target/
+engine-java/target/
+
+# Generated TP outputs
+outputs/
+*.log
