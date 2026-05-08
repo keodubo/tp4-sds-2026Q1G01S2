@@ -4,6 +4,10 @@
 # Temp files
 /tmp
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # Java build outputs
 target/
 SdS_TP4_2026Q1G01CS2_Codigo/target/
