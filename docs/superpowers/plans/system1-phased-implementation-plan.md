@@ -4,7 +4,7 @@
 
 **Goal:** Provide a sequential implementation roadmap for TP4 System 1, explicitly mapping phases to enunciado items `1.1`, `1.2`, and `1.3`.
 
-**Architecture:** Build the Java engine first, emitting raw trajectory CSV only. Then add independent postprocessing that reads the Java CSV to compute the analytical solution, ECM, and figures. This preserves the enunciado requirement that simulation output is text and analysis runs independently from that output.
+**Architecture:** Build the Java engine first, emitting raw trajectory CSV only. Then add independent postprocessing that reads the Java CSV to compute the analytical solution, ECM, figures, and method ranking. This preserves the enunciado requirement that simulation output is text and analysis runs independently from that output.
 
 **Tech Stack:** Java 21, Maven, JUnit 5 for Java tests, Python later for postprocessing and figures.
 
@@ -86,7 +86,7 @@ BUILD SUCCESS
 
 - [ ] Add JUnit 5 as a test dependency only.
 - [ ] Implement default parameters from slide 36: `m=70`, `k=10000`, `gamma=100`, `tf=5`, `x0=1`, `v0=-gamma/(2m)`.
-- [ ] Implement default `dt` list: `0.1,0.01,0.001,0.0001`.
+- [ ] Implement default `dt` sweep: `0.01,0.001,0.0001,0.00001,0.000001`. Treat these as the group's reproducible experimental sweep for item `1.3`, including the professor-requested `10^-6` value.
 - [ ] Validate `m > 0`, `k > 0`, `gamma >= 0`, `tf > 0`, each `dt > 0`, no duplicate `dt`, and integer `tf/dt`.
 - [ ] Implement oscillator acceleration `a(x,v)=(-k*x-gamma*v)/m`.
 - [ ] Implement CSV metadata and columns: `method,dt,time,x,v`.
@@ -151,7 +151,7 @@ v(t+dt) = v(t) + a(t)*dt
 ```bash
 cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn test
-mvn exec:java -Dexec.args="system1 --dt 0.1 --output ../outputs/system1-euler-smoke.csv"
+mvn exec:java -Dexec.args="system1 --dt 0.01 --output ../outputs/system1-euler-smoke.csv"
 ```
 
 Expected result:
@@ -181,6 +181,15 @@ and `../outputs/system1-euler-smoke.csv` contains rows with `method=euler`.
 **Checklist:**
 
 - [ ] Implement original Verlet with previous state estimated by Euler evaluated at `-dt`.
+- [ ] Use the damped oscillator recurrence derived from centered acceleration and centered velocity:
+
+```text
+x(t+dt) =
+    ((2*m - k*dt^2)*x(t) + (gamma*dt/2 - m)*x(t-dt))
+    / (m + gamma*dt/2)
+```
+
+- [ ] Do not implement the force-independent shortcut `x(t+dt)=2*x(t)-x(t-dt)+a(t)*dt^2` for the damped oscillator, because `a(t)` depends on velocity and would otherwise be circular.
 - [ ] Export Verlet velocity using centered difference:
 
 ```text
@@ -210,6 +219,7 @@ r[n+2] = -(gamma/m)*r[n+1] - (k/m)*r[n]
 
 - [ ] Emit fixed method names: `verlet`, `beeman`, `gear5`.
 - [ ] Test that the CSV contains all four methods for each `dt`.
+- [ ] Test the Verlet one-step update against the damped recurrence, including the denominator term `m + gamma*dt/2`.
 
 **Exit criteria for `1.1`:**
 
@@ -246,6 +256,7 @@ and `../outputs/system1.csv` contains `euler`, `verlet`, `beeman`, and `gear5` r
 - Create: `analysis-python/system1/README.md`
 - Create: `analysis-python/system1/analyze_system1.py`
 - Create: `analysis-python/system1/test_analyze_system1.py` or equivalent lightweight verification
+- Create during execution: `outputs/system1_outputs_manifest.csv`
 
 **Checklist:**
 
@@ -267,10 +278,21 @@ ECM = sum((x_numeric - x_analytical)^2) / number_of_steps
 ```
 
 - [ ] Write an analysis CSV such as `outputs/system1_ecm.csv`.
+- [ ] Write or update `outputs/system1_outputs_manifest.csv` with one row per generated output and these columns:
+
+```text
+system,inciso,artifact_type,path,description
+```
+
+- [ ] Record `outputs/system1.csv` as `system=1`, `inciso=1.1`, `artifact_type=raw-trajectory`.
+- [ ] Record `outputs/system1_ecm.csv` as `system=1`, `inciso=1.2`, `artifact_type=analysis-data`.
+- [ ] Add a lightweight analysis test or fixture proving that the default initial conditions reduce the general solution to the slide-36 expression.
+- [ ] Add a lightweight analysis test or fixture proving that ECM is grouped by `(method, dt)` and normalized by the number of trajectory rows in that group.
 
 **Exit criteria:**
 
 - Given `outputs/system1.csv`, analysis can produce ECM values without rerunning Java.
+- The output manifest maps generated files to TP4 incisos.
 - This phase still does not satisfy the plotting part of `1.2`.
 
 **Verification command:**
@@ -283,6 +305,7 @@ Expected result:
 
 ```text
 outputs/system1_ecm.csv
+outputs/system1_outputs_manifest.csv
 ```
 
 contains one row per `(method, dt)`.
@@ -303,8 +326,11 @@ contains one row per `(method, dt)`.
 **Checklist:**
 
 - [ ] Generate position comparison figures from Java CSV plus reconstructed analytical solution.
-- [ ] Use one representative `dt` for readable analytical-vs-numerical plots, likely `dt=0.001`.
+- [ ] Generate readable analytical-vs-numerical plots for `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
+- [ ] Generate an additional zoomed analytical-vs-numerical plot for `dt=0.001` so the overlap differences are visible.
+- [ ] Use distinct marker shapes for the numerical methods in position comparison figures so overlapping curves remain distinguishable.
 - [ ] Include all four methods in the comparison, either as separate plots or a clear combined plot.
+- [ ] Add every generated analytical-vs-numerical figure to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.2`, `artifact_type=figure`.
 - [ ] Keep generated figures out of the Java code ZIP.
 - [ ] Document exact command in `analysis-python/system1/README.md`.
 
@@ -312,11 +338,12 @@ contains one row per `(method, dt)`.
 
 - There is a figure comparing analytical and numerical solutions.
 - ECM is computed from output files, not during simulation.
+- The manifest identifies every figure generated for `1.2`.
 
 **Verification command:**
 
 ```bash
-python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures
+python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --figure-dt 0.001
 ```
 
 Expected result:
@@ -324,6 +351,7 @@ Expected result:
 ```text
 outputs/system1_ecm.csv
 outputs/system1_figures/
+outputs/system1_outputs_manifest.csv
 ```
 
 ---
@@ -342,22 +370,26 @@ outputs/system1_figures/
 
 **Checklist:**
 
-- [ ] Use ECM rows for all default `dt`: `0.1`, `0.01`, `0.001`, `0.0001`.
+- [ ] Use ECM rows for all default `dt`: `0.01`, `0.001`, `0.0001`, `0.00001`, `0.000001`.
+- [ ] If the log-log trend is not clear enough, rerun Java with additional positive `dt` values that divide `tf` exactly and include them in the ECM CSV.
 - [ ] Plot `ECM` vs `dt` on logarithmic axes.
 - [ ] Include all four methods in the same figure for comparison.
 - [ ] Generate a compact ranking summary, for example best method by lowest ECM at smallest `dt`.
 - [ ] Keep the ranking data in a text or CSV output, not hardcoded into the presentation.
+- [ ] Add the ECM-vs-`dt` figure to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.3`, `artifact_type=figure`.
+- [ ] Add the ranking summary to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.3`, `artifact_type=summary`.
 
 **Exit criteria for `1.3`:**
 
 - There is a log-log ECM vs `dt` figure.
 - There is a reproducible method comparison from generated data.
 - The team can answer which integration scheme is best for this system.
+- The manifest identifies every generated artifact for `1.3`.
 
 **Verification command:**
 
 ```bash
-python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --summary-output outputs/system1_summary.md
+python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --figure-dt 0.001 --summary-output outputs/system1_summary.md
 ```
 
 Expected result:
@@ -365,6 +397,7 @@ Expected result:
 ```text
 outputs/system1_figures/ecm_vs_dt.png
 outputs/system1_summary.md
+outputs/system1_outputs_manifest.csv
 ```
 
 ---
@@ -385,7 +418,9 @@ outputs/system1_summary.md
 
 - [ ] Document Java command for generating `outputs/system1.csv`.
 - [ ] Document analysis command for generating ECM and figures.
+- [ ] Document the `outputs/system1_outputs_manifest.csv` convention so future System 2 outputs and animations also declare their TP4 inciso.
 - [ ] Document which phases cover each enunciado item.
+- [ ] Document that the Java motor alone covers only `1.1`; complete System 1 requires the analysis artifacts from phases 4-6.
 - [ ] Reiterate that generated outputs, figures, and analysis scripts are not part of the final Java code ZIP.
 - [ ] Add a manual QA checklist for System 1.
 
@@ -396,7 +431,7 @@ cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn test
 mvn exec:java -Dexec.args="system1 --output ../outputs/system1.csv"
 cd ..
-python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --summary-output outputs/system1_summary.md
+python3 analysis-python/system1/analyze_system1.py --input outputs/system1.csv --ecm-output outputs/system1_ecm.csv --figures-dir outputs/system1_figures --figure-dt 0.001 --summary-output outputs/system1_summary.md
 ```
 
 Expected result:
