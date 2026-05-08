@@ -1,0 +1,27 @@
+package ar.edu.itba.sds.tp4.system2.runner;
+
+import ar.edu.itba.sds.tp4.system2.model.System2Config;
+
+import java.nio.file.Path;
+
+public record System2RunRequest(
+        String runId,
+        int realization,
+        System2Config config,
+        Path outputDirectory
+) {
+    public System2RunRequest {
+        if (runId == null || runId.isBlank()) {
+            throw new IllegalArgumentException("runId must not be blank.");
+        }
+        if (realization < 0) {
+            throw new IllegalArgumentException("realization must be non-negative.");
+        }
+        if (config == null) {
+            throw new IllegalArgumentException("config must not be null.");
+        }
+        if (outputDirectory == null) {
+            throw new IllegalArgumentException("outputDirectory must not be null.");
+        }
+    }
+}
