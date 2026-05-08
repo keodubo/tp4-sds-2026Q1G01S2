@@ -43,6 +43,16 @@ The current Java entry point is only a scaffold:
 SdS_TP4_2026Q1G01CS2_Codigo/src/main/java/ar/edu/itba/sds/tp4/Tp4Application.java
 ```
 
+System 2 can be run from an external TOML config:
+
+```bash
+cd SdS_TP4_2026Q1G01CS2_Codigo
+mvn exec:java -Dexec.args="system2 configs/system2.example.toml"
+```
+
+This writes raw simulation files under the `output_dir` configured in the TOML:
+`metadata.json`, `states.csv`, `contacts.csv`, and `boundary_forces.csv`.
+
 ## Python Analysis
 
 Use Python only for outputs derived from simulation text files:
