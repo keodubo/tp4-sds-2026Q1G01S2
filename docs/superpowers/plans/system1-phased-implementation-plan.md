@@ -4,7 +4,7 @@
 
 **Goal:** Provide a sequential implementation roadmap for TP4 System 1, explicitly mapping phases to enunciado items `1.1`, `1.2`, and `1.3`.
 
-**Architecture:** Build the Java engine first, emitting raw trajectory CSV only. Then add independent postprocessing that reads the Java CSV to compute the analytical solution, ECM, and figures. This preserves the enunciado requirement that simulation output is text and analysis runs independently from that output.
+**Architecture:** Build the Java engine first, emitting raw trajectory CSV only. Then add independent postprocessing that reads the Java CSV to compute the analytical solution, ECM, figures, and method ranking. This preserves the enunciado requirement that simulation output is text and analysis runs independently from that output.
 
 **Tech Stack:** Java 21, Maven, JUnit 5 for Java tests, Python later for postprocessing and figures.
 
@@ -86,7 +86,7 @@ BUILD SUCCESS
 
 - [ ] Add JUnit 5 as a test dependency only.
 - [ ] Implement default parameters from slide 36: `m=70`, `k=10000`, `gamma=100`, `tf=5`, `x0=1`, `v0=-gamma/(2m)`.
-- [ ] Implement default `dt` list: `0.1,0.01,0.001,0.0001`.
+- [ ] Implement default `dt` sweep: `0.1,0.01,0.001,0.0001`. Treat these as the group's reproducible experimental sweep for item `1.3`, not as values mandated verbatim by the catedra.
 - [ ] Validate `m > 0`, `k > 0`, `gamma >= 0`, `tf > 0`, each `dt > 0`, no duplicate `dt`, and integer `tf/dt`.
 - [ ] Implement oscillator acceleration `a(x,v)=(-k*x-gamma*v)/m`.
 - [ ] Implement CSV metadata and columns: `method,dt,time,x,v`.
@@ -181,6 +181,15 @@ and `../outputs/system1-euler-smoke.csv` contains rows with `method=euler`.
 **Checklist:**
 
 - [ ] Implement original Verlet with previous state estimated by Euler evaluated at `-dt`.
+- [ ] Use the damped oscillator recurrence derived from centered acceleration and centered velocity:
+
+```text
+x(t+dt) =
+    ((2*m - k*dt^2)*x(t) + (gamma*dt/2 - m)*x(t-dt))
+    / (m + gamma*dt/2)
+```
+
+- [ ] Do not implement the force-independent shortcut `x(t+dt)=2*x(t)-x(t-dt)+a(t)*dt^2` for the damped oscillator, because `a(t)` depends on velocity and would otherwise be circular.
 - [ ] Export Verlet velocity using centered difference:
 
 ```text
@@ -210,6 +219,7 @@ r[n+2] = -(gamma/m)*r[n+1] - (k/m)*r[n]
 
 - [ ] Emit fixed method names: `verlet`, `beeman`, `gear5`.
 - [ ] Test that the CSV contains all four methods for each `dt`.
+- [ ] Test the Verlet one-step update against the damped recurrence, including the denominator term `m + gamma*dt/2`.
 
 **Exit criteria for `1.1`:**
 
@@ -267,6 +277,8 @@ ECM = sum((x_numeric - x_analytical)^2) / number_of_steps
 ```
 
 - [ ] Write an analysis CSV such as `outputs/system1_ecm.csv`.
+- [ ] Add a lightweight analysis test or fixture proving that the default initial conditions reduce the general solution to the slide-36 expression.
+- [ ] Add a lightweight analysis test or fixture proving that ECM is grouped by `(method, dt)` and normalized by the number of trajectory rows in that group.
 
 **Exit criteria:**
 
@@ -303,7 +315,7 @@ contains one row per `(method, dt)`.
 **Checklist:**
 
 - [ ] Generate position comparison figures from Java CSV plus reconstructed analytical solution.
-- [ ] Use one representative `dt` for readable analytical-vs-numerical plots, likely `dt=0.001`.
+- [ ] Use one representative `dt` for readable analytical-vs-numerical plots, likely `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
 - [ ] Include all four methods in the comparison, either as separate plots or a clear combined plot.
 - [ ] Keep generated figures out of the Java code ZIP.
 - [ ] Document exact command in `analysis-python/system1/README.md`.
@@ -343,6 +355,7 @@ outputs/system1_figures/
 **Checklist:**
 
 - [ ] Use ECM rows for all default `dt`: `0.1`, `0.01`, `0.001`, `0.0001`.
+- [ ] If the log-log trend is not clear enough, rerun Java with additional positive `dt` values that divide `tf` exactly and include them in the ECM CSV.
 - [ ] Plot `ECM` vs `dt` on logarithmic axes.
 - [ ] Include all four methods in the same figure for comparison.
 - [ ] Generate a compact ranking summary, for example best method by lowest ECM at smallest `dt`.
@@ -386,6 +399,7 @@ outputs/system1_summary.md
 - [ ] Document Java command for generating `outputs/system1.csv`.
 - [ ] Document analysis command for generating ECM and figures.
 - [ ] Document which phases cover each enunciado item.
+- [ ] Document that the Java motor alone covers only `1.1`; complete System 1 requires the analysis artifacts from phases 4-6.
 - [ ] Reiterate that generated outputs, figures, and analysis scripts are not part of the final Java code ZIP.
 - [ ] Add a manual QA checklist for System 1.
 
