@@ -256,6 +256,7 @@ and `../outputs/system1.csv` contains `euler`, `verlet`, `beeman`, and `gear5` r
 - Create: `analysis-python/system1/README.md`
 - Create: `analysis-python/system1/analyze_system1.py`
 - Create: `analysis-python/system1/test_analyze_system1.py` or equivalent lightweight verification
+- Create during execution: `outputs/system1_outputs_manifest.csv`
 
 **Checklist:**
 
@@ -277,12 +278,21 @@ ECM = sum((x_numeric - x_analytical)^2) / number_of_steps
 ```
 
 - [ ] Write an analysis CSV such as `outputs/system1_ecm.csv`.
+- [ ] Write or update `outputs/system1_outputs_manifest.csv` with one row per generated output and these columns:
+
+```text
+system,inciso,artifact_type,path,description
+```
+
+- [ ] Record `outputs/system1.csv` as `system=1`, `inciso=1.1`, `artifact_type=raw-trajectory`.
+- [ ] Record `outputs/system1_ecm.csv` as `system=1`, `inciso=1.2`, `artifact_type=analysis-data`.
 - [ ] Add a lightweight analysis test or fixture proving that the default initial conditions reduce the general solution to the slide-36 expression.
 - [ ] Add a lightweight analysis test or fixture proving that ECM is grouped by `(method, dt)` and normalized by the number of trajectory rows in that group.
 
 **Exit criteria:**
 
 - Given `outputs/system1.csv`, analysis can produce ECM values without rerunning Java.
+- The output manifest maps generated files to TP4 incisos.
 - This phase still does not satisfy the plotting part of `1.2`.
 
 **Verification command:**
@@ -295,6 +305,7 @@ Expected result:
 
 ```text
 outputs/system1_ecm.csv
+outputs/system1_outputs_manifest.csv
 ```
 
 contains one row per `(method, dt)`.
@@ -317,6 +328,7 @@ contains one row per `(method, dt)`.
 - [ ] Generate position comparison figures from Java CSV plus reconstructed analytical solution.
 - [ ] Use one representative `dt` for readable analytical-vs-numerical plots, likely `dt=0.001`, while keeping the command configurable for other `dt` values if the presentation needs them.
 - [ ] Include all four methods in the comparison, either as separate plots or a clear combined plot.
+- [ ] Add every generated analytical-vs-numerical figure to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.2`, `artifact_type=figure`.
 - [ ] Keep generated figures out of the Java code ZIP.
 - [ ] Document exact command in `analysis-python/system1/README.md`.
 
@@ -324,6 +336,7 @@ contains one row per `(method, dt)`.
 
 - There is a figure comparing analytical and numerical solutions.
 - ECM is computed from output files, not during simulation.
+- The manifest identifies every figure generated for `1.2`.
 
 **Verification command:**
 
@@ -336,6 +349,7 @@ Expected result:
 ```text
 outputs/system1_ecm.csv
 outputs/system1_figures/
+outputs/system1_outputs_manifest.csv
 ```
 
 ---
@@ -360,12 +374,15 @@ outputs/system1_figures/
 - [ ] Include all four methods in the same figure for comparison.
 - [ ] Generate a compact ranking summary, for example best method by lowest ECM at smallest `dt`.
 - [ ] Keep the ranking data in a text or CSV output, not hardcoded into the presentation.
+- [ ] Add the ECM-vs-`dt` figure to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.3`, `artifact_type=figure`.
+- [ ] Add the ranking summary to `outputs/system1_outputs_manifest.csv` as `system=1`, `inciso=1.3`, `artifact_type=summary`.
 
 **Exit criteria for `1.3`:**
 
 - There is a log-log ECM vs `dt` figure.
 - There is a reproducible method comparison from generated data.
 - The team can answer which integration scheme is best for this system.
+- The manifest identifies every generated artifact for `1.3`.
 
 **Verification command:**
 
@@ -378,6 +395,7 @@ Expected result:
 ```text
 outputs/system1_figures/ecm_vs_dt.png
 outputs/system1_summary.md
+outputs/system1_outputs_manifest.csv
 ```
 
 ---
@@ -398,6 +416,7 @@ outputs/system1_summary.md
 
 - [ ] Document Java command for generating `outputs/system1.csv`.
 - [ ] Document analysis command for generating ECM and figures.
+- [ ] Document the `outputs/system1_outputs_manifest.csv` convention so future System 2 outputs and animations also declare their TP4 inciso.
 - [ ] Document which phases cover each enunciado item.
 - [ ] Document that the Java motor alone covers only `1.1`; complete System 1 requires the analysis artifacts from phases 4-6.
 - [ ] Reiterate that generated outputs, figures, and analysis scripts are not part of the final Java code ZIP.

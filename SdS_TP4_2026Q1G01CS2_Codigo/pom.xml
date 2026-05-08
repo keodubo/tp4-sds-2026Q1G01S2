@@ -10,9 +10,19 @@
     <name>SdS TP4 2026Q1 G01 CS2 Codigo</name>
 
     <properties>
+        <junit.jupiter.version>5.13.4</junit.jupiter.version>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${junit.jupiter.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
     <build>
         <plugins>
