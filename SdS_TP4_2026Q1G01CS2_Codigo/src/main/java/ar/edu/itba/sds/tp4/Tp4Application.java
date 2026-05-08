@@ -39,7 +39,7 @@ public final class Tp4Application {
     private static void printUsage() {
         System.out.println("SdS TP4 Java engine");
         System.out.println("Available commands:");
-        System.out.println("  system1    Validate System 1 parameters and write the raw CSV contract scaffold");
+        System.out.println("  system1    Generate System 1 raw trajectory CSV");
         System.out.println();
         System.out.println(System1Command.usage());
     }

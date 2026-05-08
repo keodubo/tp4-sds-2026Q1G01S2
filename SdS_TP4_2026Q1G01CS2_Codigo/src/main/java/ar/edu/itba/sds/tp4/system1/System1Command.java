@@ -16,10 +16,11 @@ public final class System1Command {
         }
 
         System1Parameters parameters = parsedArgs.toParameters();
-        new TrajectoryCsvWriter().write(parsedArgs.outputPath(), parameters, List.of());
+        List<TrajectoryCsvWriter.Row> rows = buildRows(parameters, List.of(new EulerIntegrator()));
+        new TrajectoryCsvWriter().write(parsedArgs.outputPath(), parameters, rows);
         System.out.println("System 1 parameters validated.");
-        System.out.println("Wrote CSV contract scaffold to " + parsedArgs.outputPath());
-        System.out.println("Integrator rows are intentionally not generated until the next implementation phase.");
+        System.out.println("Wrote System 1 Euler trajectory CSV to " + parsedArgs.outputPath());
+        System.out.println("Remaining required methods are intentionally deferred to the next phase.");
     }
 
     public static String usage() {
@@ -82,6 +83,18 @@ public final class System1Command {
             parsed.add(parseDouble("--dt", value));
         }
         return parsed;
+    }
+
+    private static List<TrajectoryCsvWriter.Row> buildRows(System1Parameters parameters, List<Integrator> integrators) {
+        List<TrajectoryCsvWriter.Row> rows = new ArrayList<>();
+        for (Integrator integrator : integrators) {
+            for (double dt : parameters.dts()) {
+                for (OscillatorState state : integrator.integrate(parameters, dt)) {
+                    rows.add(new TrajectoryCsvWriter.Row(integrator.methodName(), dt, state));
+                }
+            }
+        }
+        return rows;
     }
 
     private record ParsedArgs(
