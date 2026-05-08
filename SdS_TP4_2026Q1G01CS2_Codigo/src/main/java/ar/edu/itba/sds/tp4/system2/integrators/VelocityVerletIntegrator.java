@@ -23,6 +23,28 @@ public final class VelocityVerletIntegrator {
         }
 
         ForceEvaluation initialForces = forceEvaluator.evaluate(state);
+        return step(state, dt, forceEvaluator, initialForces);
+    }
+
+    public IntegrationResult step(
+            System2State state,
+            double dt,
+            ForceEvaluator forceEvaluator,
+            ForceEvaluation initialForces
+    ) {
+        if (state == null) {
+            throw new IllegalArgumentException("state must not be null.");
+        }
+        if (dt <= 0.0) {
+            throw new IllegalArgumentException("dt must be positive.");
+        }
+        if (forceEvaluator == null) {
+            throw new IllegalArgumentException("forceEvaluator must not be null.");
+        }
+        if (initialForces == null) {
+            throw new IllegalArgumentException("initialForces must not be null.");
+        }
+
         List<DynamicParticle> predictedParticles = predictPositions(
                 state.particles(),
                 initialForces.snapshot().particleForces(),
