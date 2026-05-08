@@ -4,7 +4,7 @@ Workspace for Simulacion de Sistemas TP4.
 
 ## Current Scope
 
-System 1 is implemented through the Java simulation motor and independent Python postprocessing. System 2 remains planned work.
+This repository contains the Java TP4 simulation motor for System 1 and the current System 2 molecular-dynamics engine. System 1 also has independent Python postprocessing for ECM and figures.
 
 Planned split:
 
@@ -32,12 +32,46 @@ For delivery, keep the simulation output as text files. Analysis and animation s
 
 The Java motor alone covers only item `1.1`. Complete System 1 evidence requires the postprocessing artifacts from `analysis-python/system1/` for items `1.2` and `1.3`.
 
+## System 2 Status
+
+The current Java System 2 engine includes geometry/state models, contact detection, elastic-force evaluation, velocity Verlet integration, TOML config loading, CSV output, and runner tests.
+
+It writes raw simulation files under the configured output directory:
+
+- `metadata.json`
+- `states.csv`
+- `contacts.csv`
+- `boundary_forces.csv`
+
+System 2 output is sampled so the simulation can keep a small integration `dt` without producing unmanageable files:
+
+- `state_stride`: writes positions/velocities every `state_stride * dt`.
+- `full_contact_stride`: writes all contact types every `full_contact_stride * dt` for energy validation.
+- obstacle contacts are still written at every integration `dt`, so `Cfc(t)` can be reconstructed at the maximum temporal resolution required by the statement.
+- `boundary_force_stride`: writes aggregate obstacle/wall forces at a sampled cadence.
+
+For heavy runs with `dt = 1e-4`, start with `state_stride = 5000`, `full_contact_stride = 5000`, and `boundary_force_stride = 5000`, then reduce the strides only if energy or radial-profile plots need more temporal detail.
+
 ## Java Engine
 
 Requirements:
 
 - Java 21
 - Maven 3.9+
+
+Useful commands:
+
+```bash
+cd SdS_TP4_2026Q1G01CS2_Codigo
+mvn test
+mvn exec:java
+```
+
+The Java entry point is:
+
+```text
+SdS_TP4_2026Q1G01CS2_Codigo/src/main/java/ar/edu/itba/sds/tp4/Tp4Application.java
+```
 
 Generate the default System 1 raw trajectory:
 
@@ -51,6 +85,20 @@ The default System 1 sweep uses the course oscillator parameters from `docs/Teor
 ```bash
 cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn exec:java -Dexec.args="system1 --dt 0.01 --output ../outputs/system1-smoke.csv"
+```
+
+Run System 2 from an external TOML config:
+
+```bash
+cd SdS_TP4_2026Q1G01CS2_Codigo
+mvn exec:java -Dexec.args="system2 configs/system2.example.toml"
+```
+
+Run a short System 2 smoke case:
+
+```bash
+cd SdS_TP4_2026Q1G01CS2_Codigo
+mvn exec:java -Dexec.args="system2-smoke ../outputs/system2-smoke"
 ```
 
 ## Python Analysis
@@ -113,4 +161,6 @@ Use `system` for the TP system number, `inciso` for the enunciado item, `artifac
 - [ ] Open `outputs/system1_figures/ecm_vs_dt.png` and check that it uses logarithmic axes and all four methods are distinguishable.
 - [ ] Read `outputs/system1_summary.md` and confirm the reported best method comes from the smallest generated `dt`.
 - [ ] Check `outputs/system1_outputs_manifest.csv` includes entries for incisos `1.1`, `1.2`, and `1.3`.
+- [ ] Run System 2 from `configs/system2.example.toml` and confirm `metadata.json`, `states.csv`, `contacts.csv`, and `boundary_forces.csv` are generated.
+- [ ] Run `system2-smoke` and confirm it completes without changing tracked files.
 - [ ] Before creating `SdS_TP4_2026Q1G01CS2_Codigo.zip`, verify it contains only the Java simulation motor source code and excludes `outputs/`, `analysis-python/`, figures, docs, and generated data.

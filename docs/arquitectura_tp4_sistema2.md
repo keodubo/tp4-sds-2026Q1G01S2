@@ -336,10 +336,12 @@ outputs/system2/<run_id>/
   boundary_forces.csv
 ```
 
-Los archivos `states.csv` y `contacts.csv` deben estar sincronizados por
-`step` y `t`. Para calcular correctamente `Cfc(t)`, los contactos con el
-obstaculo deben guardarse cada `dt`; no alcanza con snapshots visuales
-submuestreados.
+Los archivos `states.csv` y `contacts.csv` deben compartir `step` y `t`. Para
+calcular correctamente `Cfc(t)`, los contactos con el obstaculo deben guardarse
+cada `dt`; no alcanza con snapshots visuales submuestreados. Los estados y los
+contactos completos pueden guardarse con strides configurables para mantener
+archivos razonables, siempre que los pasos usados para energia tengan tanto
+estado como contactos completos.
 
 ### `metadata.json`
 
@@ -359,12 +361,15 @@ Debe contener al menos:
   "particle_radius": 1.0,
   "particle_mass": 1.0,
   "initial_speed": 1.0,
-  "k": 10000.0,
+  "k": 1000.0,
   "dt": 0.0001,
   "steps": 100000,
   "integrator": "velocity_verlet",
-  "state_stride": 1,
-  "contact_stride": 1,
+  "state_stride": 5000,
+  "contact_stride": 5000,
+  "full_contact_stride": 5000,
+  "obstacle_contact_stride": 1,
+  "boundary_force_stride": 5000,
   "units": {
     "length": "m",
     "mass": "kg",
@@ -374,12 +379,15 @@ Debe contener al menos:
 }
 ```
 
-`k`, `dt`, `steps` e identificadores son ejemplos; los valores finales deben
-salir de la configuracion de corrida.
+`k`, `dt`, `steps`, strides e identificadores son ejemplos; los valores finales
+deben salir de la configuracion de corrida.
 
 ### `states.csv`
 
-Una fila por particula y por paso escrito.
+Una fila por particula y por paso escrito. El archivo debe incluir los pasos
+divisibles por `state_stride` y tambien los divisibles por
+`full_contact_stride`, para que la energia pueda calcularse en los pasos donde
+se guardan contactos completos.
 
 Columnas minimas:
 
@@ -412,7 +420,10 @@ No debe incluir:
 
 ### `contacts.csv`
 
-Una fila por contacto activo y por paso escrito.
+Una fila por contacto activo y por paso escrito. Para evitar archivos enormes,
+los contactos de tipo `particle_obstacle` se escriben cada `dt`, mientras que
+los contactos completos (`particle_particle`, `particle_obstacle` y
+`particle_wall`) se escriben en los pasos divisibles por `full_contact_stride`.
 
 Columnas minimas:
 
@@ -442,9 +453,13 @@ Este archivo es la fuente de verdad para:
 - fuerzas instantaneas de contacto;
 - validacion de accion y reaccion.
 
+Para `Cfc(t)`, usar todos los contactos `particle_obstacle`. Para energia,
+usar solo los pasos divisibles por `full_contact_stride`, donde el archivo tiene
+todos los tipos de contacto activos.
+
 ### `boundary_forces.csv`
 
-Una fila por paso escrito.
+Una fila por paso escrito, con cadencia configurable `boundary_force_stride`.
 
 Columnas minimas:
 
