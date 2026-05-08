@@ -167,11 +167,20 @@ def write_position_figures(
     grouped_rows: dict[float, dict[str, list[TrajectoryRow]]] = {
         dt: defaultdict(list) for dt in figure_dts
     }
+    matched_dts: set[float] = set()
     for row in rows:
         for requested_dt in figure_dts:
             if math.isclose(row.dt, requested_dt, rel_tol=1e-12, abs_tol=1e-15):
                 grouped_rows[requested_dt][row.method].append(row)
+                matched_dts.add(requested_dt)
                 break
+
+    missing_dts = [dt for dt in figure_dts if dt not in matched_dts]
+    if missing_dts:
+        raise ValueError(
+            "requested figure dt values not found in trajectory CSV: "
+            + ", ".join(format_float(dt) for dt in missing_dts)
+        )
 
     generated: list[Path] = []
     for dt in sorted(figure_dts):

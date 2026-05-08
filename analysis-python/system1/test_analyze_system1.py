@@ -112,6 +112,31 @@ class AnalyzeSystem1Test(unittest.TestCase):
                 self.assertTrue(path.exists())
                 self.assertGreater(path.stat().st_size, 0)
 
+    def test_position_figures_reject_missing_requested_dt(self):
+        params = PhysicalParameters(
+            mass=70.0,
+            spring_constant=10000.0,
+            gamma=100.0,
+            final_time=0.01,
+            initial_position=1.0,
+            initial_velocity=-100.0 / (2.0 * 70.0),
+            dts=(0.01,),
+        )
+        analytical = analytical_state(0.0, params)
+        rows = [
+            TrajectoryRow(
+                method="euler",
+                dt=0.01,
+                time=0.0,
+                position=analytical.position,
+                velocity=analytical.velocity,
+            )
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "0.001"):
+                write_position_figures(Path(temp_dir), rows, params, (0.01, 0.001))
+
 
 if __name__ == "__main__":
     unittest.main()

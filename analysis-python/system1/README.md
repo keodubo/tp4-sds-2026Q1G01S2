@@ -33,6 +33,8 @@ python3 analysis-python/system1/analyze_system1.py \
   --figure-dt 0.01,0.001
 ```
 
+The `--figure-dt` values must already exist in the Java trajectory CSV. Rerun the Java command with the desired `--dt` values before requesting additional figures.
+
 Run the lightweight analysis tests:
 
 ```bash
