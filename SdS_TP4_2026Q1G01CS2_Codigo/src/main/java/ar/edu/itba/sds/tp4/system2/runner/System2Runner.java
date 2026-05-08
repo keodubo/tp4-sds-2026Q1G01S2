@@ -6,12 +6,12 @@ import ar.edu.itba.sds.tp4.system2.forces.System2ForceEvaluator;
 import ar.edu.itba.sds.tp4.system2.initialization.System2InitialStateGenerator;
 import ar.edu.itba.sds.tp4.system2.integrators.VelocityVerletIntegrator;
 import ar.edu.itba.sds.tp4.system2.output.System2CsvSnapshotSink;
+import ar.edu.itba.sds.tp4.system2.output.System2OutputConfig;
 import ar.edu.itba.sds.tp4.system2.output.System2OutputMetadata;
 import ar.edu.itba.sds.tp4.system2.state.System2State;
 
 public final class System2Runner {
     public static final String INTEGRATOR_NAME = "velocity_verlet";
-    public static final int RAW_OUTPUT_STRIDE = 1;
 
     private final System2InitialStateGenerator initialStateGenerator;
 
@@ -42,11 +42,17 @@ public final class System2Runner {
                 request.realization(),
                 request.config(),
                 INTEGRATOR_NAME,
-                RAW_OUTPUT_STRIDE,
-                RAW_OUTPUT_STRIDE
+                request.outputConfig().stateStride(),
+                request.outputConfig().fullContactStride(),
+                System2OutputConfig.OBSTACLE_CONTACT_STRIDE,
+                request.outputConfig().boundaryForceStride()
         );
 
-        try (System2CsvSnapshotSink sink = new System2CsvSnapshotSink(request.outputDirectory(), metadata)) {
+        try (System2CsvSnapshotSink sink = new System2CsvSnapshotSink(
+                request.outputDirectory(),
+                metadata,
+                request.outputConfig()
+        )) {
             System2RunResult runResult = engine.run(
                     initialState,
                     request.config().dt(),

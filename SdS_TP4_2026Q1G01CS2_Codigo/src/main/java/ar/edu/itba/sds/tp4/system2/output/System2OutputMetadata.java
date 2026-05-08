@@ -9,13 +9,35 @@ public record System2OutputMetadata(
         System2Config config,
         String integrator,
         int stateStride,
-        int contactStride
+        int fullContactStride,
+        int obstacleContactStride,
+        int boundaryForceStride
 ) {
     public static final String LENGTH_UNIT = "m";
     public static final String MASS_UNIT = "kg";
     public static final String TIME_UNIT = "s";
     public static final String NORMAL_CONVENTION =
             "contacts file stores n_ij from body i to body j; force_on_i = -k * overlap * n_ij";
+
+    public System2OutputMetadata(
+            String runId,
+            int realization,
+            System2Config config,
+            String integrator,
+            int stateStride,
+            int contactStride
+    ) {
+        this(
+                runId,
+                realization,
+                config,
+                integrator,
+                stateStride,
+                contactStride,
+                System2OutputConfig.OBSTACLE_CONTACT_STRIDE,
+                contactStride
+        );
+    }
 
     public System2OutputMetadata {
         if (runId == null || runId.isBlank()) {
@@ -33,8 +55,14 @@ public record System2OutputMetadata(
         if (stateStride <= 0) {
             throw new IllegalArgumentException("stateStride must be positive.");
         }
-        if (contactStride <= 0) {
-            throw new IllegalArgumentException("contactStride must be positive.");
+        if (fullContactStride <= 0) {
+            throw new IllegalArgumentException("fullContactStride must be positive.");
+        }
+        if (obstacleContactStride <= 0) {
+            throw new IllegalArgumentException("obstacleContactStride must be positive.");
+        }
+        if (boundaryForceStride <= 0) {
+            throw new IllegalArgumentException("boundaryForceStride must be positive.");
         }
     }
 
@@ -61,7 +89,15 @@ public record System2OutputMetadata(
                 + jsonField(indent, "steps", config.steps()) + ",\n"
                 + jsonField(indent, "integrator", integrator) + ",\n"
                 + jsonField(indent, "state_stride", stateStride) + ",\n"
-                + jsonField(indent, "contact_stride", contactStride) + ",\n"
+                + jsonField(indent, "contact_stride", fullContactStride) + ",\n"
+                + jsonField(indent, "full_contact_stride", fullContactStride) + ",\n"
+                + jsonField(indent, "obstacle_contact_stride", obstacleContactStride) + ",\n"
+                + jsonField(indent, "boundary_force_stride", boundaryForceStride) + ",\n"
+                + jsonField(
+                        indent,
+                        "state_sampling",
+                        "states.csv includes steps divisible by state_stride or full_contact_stride"
+                ) + ",\n"
                 + indent + "\"units\": {\n"
                 + jsonField(nestedIndent, "length", LENGTH_UNIT) + ",\n"
                 + jsonField(nestedIndent, "mass", MASS_UNIT) + ",\n"

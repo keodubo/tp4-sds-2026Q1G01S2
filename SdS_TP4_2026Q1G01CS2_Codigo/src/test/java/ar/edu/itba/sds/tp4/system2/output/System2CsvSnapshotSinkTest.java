@@ -2,6 +2,7 @@ package ar.edu.itba.sds.tp4.system2.output;
 
 import ar.edu.itba.sds.tp4.common.math.Vector2;
 import ar.edu.itba.sds.tp4.system2.engine.System2Engine;
+import ar.edu.itba.sds.tp4.system2.engine.System2Snapshot;
 import ar.edu.itba.sds.tp4.system2.forces.System2ForceEvaluator;
 import ar.edu.itba.sds.tp4.system2.model.System2Config;
 import ar.edu.itba.sds.tp4.system2.model.System2Geometry;
@@ -101,6 +102,41 @@ class System2CsvSnapshotSinkTest {
         System2Engine engine = new System2Engine(new System2ForceEvaluator(geometry, 100.0));
 
         assertThrows(IllegalStateException.class, () -> engine.run(state, 0.1, 0, sink));
+    }
+
+    @Test
+    void outputSamplingKeepsObstacleContactsAtEveryIntegrationStep() throws Exception {
+        System2ForceEvaluator evaluator = new System2ForceEvaluator(geometry, 100.0);
+        System2OutputConfig outputConfig = new System2OutputConfig(2, 3, 2);
+
+        try (System2CsvSnapshotSink sink = new System2CsvSnapshotSink(outputDirectory, metadata(), outputConfig)) {
+            for (int step = 0; step <= 3; step++) {
+                System2State state = new System2State(step, step * 0.1, List.of(
+                        new DynamicParticle(0, new Vector2(1.8, 0.0), Vector2.ZERO, 1.0, 1.0)
+                ));
+                sink.accept(new System2Snapshot(state, evaluator.evaluate(state)));
+            }
+        }
+
+        List<String> states = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.STATES_FILE_NAME));
+        assertEquals(4, states.size());
+        assertTrue(states.get(1).startsWith("0,"));
+        assertTrue(states.get(2).startsWith("2,"));
+        assertTrue(states.get(3).startsWith("3,"));
+
+        List<String> contacts = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.CONTACTS_FILE_NAME));
+        assertEquals(5, contacts.size());
+        assertTrue(contacts.get(1).startsWith("0,"));
+        assertTrue(contacts.get(2).startsWith("1,"));
+        assertTrue(contacts.get(3).startsWith("2,"));
+        assertTrue(contacts.get(4).startsWith("3,"));
+
+        List<String> boundaryForces = Files.readAllLines(
+                outputDirectory.resolve(System2CsvSnapshotSink.BOUNDARY_FORCES_FILE_NAME)
+        );
+        assertEquals(3, boundaryForces.size());
+        assertTrue(boundaryForces.get(1).startsWith("0,"));
+        assertTrue(boundaryForces.get(2).startsWith("2,"));
     }
 
     private System2OutputMetadata metadata() {

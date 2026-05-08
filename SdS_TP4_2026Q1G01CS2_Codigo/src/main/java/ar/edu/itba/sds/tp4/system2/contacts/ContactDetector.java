@@ -10,6 +10,18 @@ import java.util.List;
 
 public final class ContactDetector {
     private static final Vector2 ORIGIN = Vector2.ZERO;
+    private final CellIndexParticleContactFinder particleContactFinder;
+
+    public ContactDetector() {
+        this(new CellIndexParticleContactFinder());
+    }
+
+    public ContactDetector(CellIndexParticleContactFinder particleContactFinder) {
+        if (particleContactFinder == null) {
+            throw new IllegalArgumentException("particleContactFinder must not be null.");
+        }
+        this.particleContactFinder = particleContactFinder;
+    }
 
     public List<Contact> detect(System2State state, System2Geometry geometry) {
         return detect(state.particles(), geometry);
@@ -24,31 +36,9 @@ public final class ContactDetector {
         }
 
         List<Contact> contacts = new ArrayList<>();
-        detectParticleParticleContacts(particles, contacts);
+        contacts.addAll(particleContactFinder.findContacts(particles, geometry));
         detectBoundaryContacts(particles, geometry, contacts);
         return List.copyOf(contacts);
-    }
-
-    private void detectParticleParticleContacts(List<DynamicParticle> particles, List<Contact> contacts) {
-        for (int i = 0; i < particles.size(); i++) {
-            DynamicParticle particle = particles.get(i);
-            for (int j = i + 1; j < particles.size(); j++) {
-                DynamicParticle other = particles.get(j);
-                Vector2 separation = other.position().subtract(particle.position());
-                double distance = separation.norm();
-                double overlap = particle.radius() + other.radius() - distance;
-                if (overlap <= 0.0) {
-                    continue;
-                }
-                contacts.add(Contact.particleParticle(
-                        particle.id(),
-                        other.id(),
-                        distance,
-                        overlap,
-                        normalizedContactNormal(separation, "particle-particle")
-                ));
-            }
-        }
     }
 
     private void detectBoundaryContacts(

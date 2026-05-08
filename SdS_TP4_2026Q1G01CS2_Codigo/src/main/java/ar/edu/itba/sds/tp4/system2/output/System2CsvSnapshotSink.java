@@ -26,15 +26,32 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
     private final BufferedWriter statesWriter;
     private final BufferedWriter contactsWriter;
     private final BufferedWriter boundaryForcesWriter;
+    private final System2OutputConfig outputConfig;
     private boolean closed;
 
     public System2CsvSnapshotSink(Path outputDirectory, System2OutputMetadata metadata) {
+        this(outputDirectory, metadata, new System2OutputConfig(
+                metadata.stateStride(),
+                metadata.fullContactStride(),
+                metadata.boundaryForceStride()
+        ));
+    }
+
+    public System2CsvSnapshotSink(
+            Path outputDirectory,
+            System2OutputMetadata metadata,
+            System2OutputConfig outputConfig
+    ) {
         if (outputDirectory == null) {
             throw new IllegalArgumentException("outputDirectory must not be null.");
         }
         if (metadata == null) {
             throw new IllegalArgumentException("metadata must not be null.");
         }
+        if (outputConfig == null) {
+            throw new IllegalArgumentException("outputConfig must not be null.");
+        }
+        this.outputConfig = outputConfig;
 
         try {
             Files.createDirectories(outputDirectory);
@@ -61,9 +78,13 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
         }
 
         try {
-            writeStateRows(snapshot.state());
+            if (shouldWriteStateRows(snapshot.state().step())) {
+                writeStateRows(snapshot.state());
+            }
             writeContactRows(snapshot);
-            writeBoundaryForceRow(snapshot);
+            if (isStrideStep(snapshot.state().step(), outputConfig.boundaryForceStride())) {
+                writeBoundaryForceRow(snapshot);
+            }
         } catch (IOException exception) {
             throw new UncheckedIOException("Could not write System 2 snapshot.", exception);
         }
@@ -116,8 +137,12 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
 
     private void writeContactRows(System2Snapshot snapshot) throws IOException {
         System2State state = snapshot.state();
+        boolean fullContactStep = isStrideStep(state.step(), outputConfig.fullContactStride());
         for (ContactForce contactForce : snapshot.forces().snapshot().contactForces()) {
             Contact contact = contactForce.contact();
+            if (!fullContactStep && contact.type() != ContactType.PARTICLE_OBSTACLE) {
+                continue;
+            }
             Vector2 normal = contact.normalFromParticleToOther();
             Vector2 forceOnParticle = contactForce.forceOnParticle();
             Vector2 forceOnOther = contactForce.forceOnOtherBody();
@@ -164,6 +189,15 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
         return snapshot.forces().contacts().stream()
                 .filter(contact -> contact.type() == type)
                 .count();
+    }
+
+    private boolean shouldWriteStateRows(long step) {
+        return isStrideStep(step, outputConfig.stateStride())
+                || isStrideStep(step, outputConfig.fullContactStride());
+    }
+
+    private boolean isStrideStep(long step, int stride) {
+        return step % stride == 0;
     }
 
     private String contactOtherBodyName(Contact contact) {

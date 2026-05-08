@@ -2,6 +2,7 @@ package ar.edu.itba.sds.tp4.system2.config;
 
 import ar.edu.itba.sds.tp4.system2.model.System2Config;
 import ar.edu.itba.sds.tp4.system2.model.System2Geometry;
+import ar.edu.itba.sds.tp4.system2.output.System2OutputConfig;
 import ar.edu.itba.sds.tp4.system2.runner.System2RunRequest;
 import org.tomlj.Toml;
 import org.tomlj.TomlParseError;
@@ -37,6 +38,7 @@ public final class System2RunRequestLoader {
         TomlTable particles = requiredTable(result, "particles");
         TomlTable interaction = requiredTable(result, "interaction");
         TomlTable simulation = requiredTable(result, "simulation");
+        TomlTable output = result.getTable("output");
 
         String runId = requiredString(run, "run_id");
         int realization = requiredInt(run, "realization");
@@ -58,7 +60,7 @@ public final class System2RunRequestLoader {
                 requiredLong(simulation, "seed")
         );
 
-        return new System2RunRequest(runId, realization, config, outputDirectory);
+        return new System2RunRequest(runId, realization, config, outputDirectory, outputConfig(output));
     }
 
     private TomlTable requiredTable(TomlParseResult result, String tableName) {
@@ -91,6 +93,28 @@ public final class System2RunRequestLoader {
             throw new IllegalArgumentException("Missing required integer field '" + key + "'.");
         }
         return value;
+    }
+
+    private int optionalInt(TomlTable table, String key, int defaultValue) {
+        if (table == null) {
+            return defaultValue;
+        }
+        Long value = table.getLong(key);
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Integer field '" + key + "' is out of range.");
+        }
+        return (int) value.longValue();
+    }
+
+    private System2OutputConfig outputConfig(TomlTable output) {
+        return new System2OutputConfig(
+                optionalInt(output, "state_stride", 1),
+                optionalInt(output, "full_contact_stride", 1),
+                optionalInt(output, "boundary_force_stride", 1)
+        );
     }
 
     private double requiredDouble(TomlTable table, String key) {

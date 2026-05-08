@@ -40,6 +40,11 @@ class System2RunRequestLoaderTest {
                 dt = 0.0001
                 steps = 500
                 seed = 12345
+
+                [output]
+                state_stride = 250
+                full_contact_stride = 100
+                boundary_force_stride = 250
                 """);
 
         System2RunRequest request = new System2RunRequestLoader().load(configPath);
@@ -54,6 +59,9 @@ class System2RunRequestLoaderTest {
         assertEquals(0.0001, request.config().dt(), 1e-12);
         assertEquals(500, request.config().steps());
         assertEquals(12345L, request.config().seed());
+        assertEquals(250, request.outputConfig().stateStride());
+        assertEquals(100, request.outputConfig().fullContactStride());
+        assertEquals(250, request.outputConfig().boundaryForceStride());
     }
 
     @Test

@@ -14,9 +14,14 @@ mass = 1.0
 initial_speed = 1.0
 
 [interaction]
-k = 10000.0
+k = 1000.0
 
 [simulation]
 dt = 0.0001
 steps = 1000
 seed = 12345
+
+[output]
+state_stride = 100
+full_contact_stride = 100
+boundary_force_stride = 100

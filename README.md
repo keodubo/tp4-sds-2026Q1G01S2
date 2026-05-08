@@ -4,7 +4,7 @@ Workspace for Simulacion de Sistemas TP4.
 
 ## Current Scope
 
-This repository is currently scaffolded only. The TP4 simulation logic has not been implemented yet.
+This repository contains the Java TP4 simulation motor scaffold plus the current System 2 molecular-dynamics engine.
 
 Planned split:
 
@@ -37,7 +37,7 @@ mvn test
 mvn exec:java
 ```
 
-The current Java entry point is only a scaffold:
+The Java entry point is:
 
 ```text
 SdS_TP4_2026Q1G01CS2_Codigo/src/main/java/ar/edu/itba/sds/tp4/Tp4Application.java
@@ -52,6 +52,20 @@ mvn exec:java -Dexec.args="system2 configs/system2.example.toml"
 
 This writes raw simulation files under the `output_dir` configured in the TOML:
 `metadata.json`, `states.csv`, `contacts.csv`, and `boundary_forces.csv`.
+
+System 2 output is sampled so the simulation can keep a small integration `dt`
+without producing unmanageable files:
+
+- `state_stride`: writes positions/velocities every `state_stride * dt`.
+- `full_contact_stride`: writes all contact types every `full_contact_stride * dt`
+  for energy validation.
+- obstacle contacts are still written at every integration `dt`, so `Cfc(t)` can
+  be reconstructed at the maximum temporal resolution required by the statement.
+- `boundary_force_stride`: writes aggregate obstacle/wall forces at a sampled cadence.
+
+For heavy runs with `dt = 1e-4`, start with `state_stride = 5000`,
+`full_contact_stride = 5000`, and `boundary_force_stride = 5000`, then reduce
+the strides only if energy or radial-profile plots need more temporal detail.
 
 ## Python Analysis
 
