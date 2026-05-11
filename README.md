@@ -125,6 +125,43 @@ Default sweep:
 This creates generated configs, raw outputs, and `manifest.csv` under
 `outputs/system2-sweeps/system2-tp4-final/`, which is ignored by git.
 
+## Codex Cloud Output Run
+
+For an overnight cloud run that generates the final raw outputs and pushes them
+back to the current branch, use:
+
+```bash
+bash scripts/cloud_run_outputs_and_push.sh
+```
+
+By default this runs:
+
+- TP4 System 2 final sweep: `75` runs = `5 N` values * `3 k` values * `5` seeds.
+- TP3 reference sweep: `25` runs = `5 N` values * `5` seeds, with `snapshot.txt`, `center_contacts.csv`, `used_fraction.csv`, `radial_profile_samples.csv`, `radial_profiles.csv`, and `metadata.json` per run.
+- script-level unit tests before the heavy run.
+- Git LFS setup for large raw `.csv`, `.txt`, and `.log` files under the final output folders.
+- a final commit and push with message `data: add TP3 and TP4 simulation outputs`.
+
+The script keeps `outputs/` ignored for normal local work and force-adds only:
+
+```text
+outputs/system2-sweeps/system2-tp4-final/
+outputs/tp3-reference/tp3-final-grid/
+outputs/cloud-run-summary-*.txt
+outputs/script-tests-*.log
+```
+
+Useful environment overrides:
+
+```bash
+RUN_TP3=0 bash scripts/cloud_run_outputs_and_push.sh
+RUN_TP4=0 bash scripts/cloud_run_outputs_and_push.sh
+COMMIT_MESSAGE="data: add final simulation outputs" bash scripts/cloud_run_outputs_and_push.sh
+```
+
+After pulling the generated outputs locally, run `git lfs pull` if Git LFS did
+not download the large files automatically.
+
 ## Python Analysis
 
 Use Python only for outputs derived from simulation text files:

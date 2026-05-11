@@ -1,0 +1,8 @@
+# Final simulation outputs are generated in Codex Cloud and committed for handoff.
+# Keep these large raw files in Git LFS instead of normal Git history.
+/outputs/system2-sweeps/system2-tp4-final/**/*.csv filter=lfs diff=lfs merge=lfs -text
+/outputs/system2-sweeps/system2-tp4-final/**/*.txt filter=lfs diff=lfs merge=lfs -text
+/outputs/system2-sweeps/system2-tp4-final/**/*.log filter=lfs diff=lfs merge=lfs -text
+/outputs/tp3-reference/tp3-final-grid/**/*.csv filter=lfs diff=lfs merge=lfs -text
+/outputs/tp3-reference/tp3-final-grid/**/*.txt filter=lfs diff=lfs merge=lfs -text
+/outputs/tp3-reference/tp3-final-grid/**/*.log filter=lfs diff=lfs merge=lfs -text

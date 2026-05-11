@@ -54,6 +54,11 @@ Archivos principales:
 outputs/tp3-reference/tp3-final-grid/manifest.csv
 outputs/tp3-reference/tp3-final-grid/configs/N_100/r_00.toml
 outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/snapshot.txt
+outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/metadata.json
+outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/center_contacts.csv
+outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/used_fraction.csv
+outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/radial_profile_samples.csv
+outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/radial_profiles.csv
 ```
 
 `outputs/` esta ignorado por Git, asi que estas configs y salidas son locales y regenerables.
@@ -62,3 +67,11 @@ outputs/tp3-reference/tp3-final-grid/raw/N_100/r_00/snapshot.txt
 
 TP3 es dirigido por eventos. `comparison_dt` y los strides quedan registrados para alinear el barrido con TP4, pero no son un paso de integracion TP3. En la copia compacta actual, `snapshot_every` es una cadencia por cantidad de eventos; la exportacion CSV muestreada cada `0.5 s` queda para la siguiente fase si necesitamos comparacion punto a punto.
 
+El runner actual ya exporta los observables necesarios para la comparacion manual:
+
+- `center_contacts.csv`: serie `Cfc(t)` con los cambios `fresh -> used`.
+- `used_fraction.csv`: fraccion de particulas usadas en cada snapshot registrado.
+- `radial_profile_samples.csv`: muestras por capa radial para particulas frescas entrantes.
+- `radial_profiles.csv`: perfil radial agregado por corrida.
+
+Lo que no hace todavia es escribir un `states.csv` remuestreado cada `0.5 s`; para eso se usa el `snapshot.txt` dirigido por eventos si hace falta inspeccionar posiciones/velocidades.

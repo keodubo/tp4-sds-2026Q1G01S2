@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
-import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,6 +14,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TP3_PROJECT_DIR = PROJECT_ROOT / "SdS_TP3_2026Q1G01CS2_Codigo"
 DEFAULT_PARTICLE_COUNTS = (100, 250, 500, 750, 1000)
+
+sys.path.insert(0, str(TP3_PROJECT_DIR / "src"))
+
+from tp3_sds.system1.config import load_config, validate_config  # noqa: E402
+from tp3_sds.system1.simulation import SimulationResult, run_simulation  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -175,39 +181,150 @@ def write_configs_and_manifest(runs: list[RunSpec]) -> Path:
 
 
 def run_sweep(runs: list[RunSpec], skip_validation: bool) -> None:
-    env = {**os.environ, "PYTHONPATH": str(TP3_PROJECT_DIR / "src")}
     for index, run in enumerate(runs, start=1):
         config_path = (PROJECT_ROOT / run.config_path).resolve()
+        config = load_config(config_path)
         if not skip_validation:
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "tp3_sds",
-                    "system1",
-                    "validate-config",
-                    "--config",
-                    config_path.as_posix(),
-                ],
-                cwd=TP3_PROJECT_DIR,
-                env=env,
-                check=True,
-            )
+            validation = validate_config(config)
+            if not validation.is_valid:
+                raise ValueError("; ".join(validation.errors))
         print(f"[{index}/{len(runs)}] {run.run_id}", flush=True)
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "tp3_sds",
-                "system1",
-                "run",
-                "--config",
-                config_path.as_posix(),
-            ],
-            cwd=TP3_PROJECT_DIR,
-            env=env,
-            check=True,
+        started_at = time.perf_counter()
+        result = run_simulation(config, config_path=config_path)
+        runtime_seconds = time.perf_counter() - started_at
+        write_reference_artifacts(run, result, runtime_seconds=runtime_seconds)
+
+
+def write_reference_artifacts(run: RunSpec, result: SimulationResult, *, runtime_seconds: float) -> None:
+    output_dir = PROJECT_ROOT / run.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    write_metadata(run, result, runtime_seconds=runtime_seconds)
+    write_center_contacts(output_dir / "center_contacts.csv", result)
+    write_used_fraction(output_dir / "used_fraction.csv", result)
+    write_radial_profile_samples(output_dir / "radial_profile_samples.csv", result)
+    write_radial_profiles(output_dir / "radial_profiles.csv", result)
+
+
+def write_metadata(run: RunSpec, result: SimulationResult, *, runtime_seconds: float) -> None:
+    settings = run.settings
+    metadata = {
+        "contract_version": "tp3-reference-v1",
+        "run_id": run.run_id,
+        "N": run.particle_count,
+        "realization": run.realization,
+        "seed": run.seed,
+        "tf": settings.final_time,
+        "comparison_dt": settings.comparison_dt,
+        "sample_dt": settings.sample_dt,
+        "state_stride": settings.state_stride,
+        "full_contact_stride": settings.full_contact_stride,
+        "boundary_force_stride": settings.boundary_force_stride,
+        "event_driven": True,
+        "processed_events": result.processed_events,
+        "snapshots_written": result.snapshots_written,
+        "final_time": result.final_time,
+        "runtime_seconds": runtime_seconds,
+        "scanning_count": result.scanning_count,
+        "files": [
+            "snapshot.txt",
+            "center_contacts.csv",
+            "used_fraction.csv",
+            "radial_profile_samples.csv",
+            "radial_profiles.csv",
+            "metadata.json",
+        ],
+        "note": (
+            "TP3 is event-driven. comparison_dt and strides document the "
+            "TP4-compatible observation cadence, not a TP3 integration step."
+        ),
+    }
+    metadata_path = PROJECT_ROOT / run.output_dir / "metadata.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_center_contacts(path: Path, result: SimulationResult) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=("time", "c_fc"))
+        writer.writeheader()
+        for time_value, count in result.center_contact_series:
+            writer.writerow({"time": f"{time_value:.12g}", "c_fc": count})
+
+
+def write_used_fraction(path: Path, result: SimulationResult) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=("time", "used_fraction"))
+        writer.writeheader()
+        for time_value, fraction in result.used_fraction_history:
+            writer.writerow({"time": f"{time_value:.12g}", "used_fraction": f"{fraction:.12g}"})
+
+
+def write_radial_profile_samples(path: Path, result: SimulationResult) -> None:
+    inner = 2.0
+    outer = 39.0
+    bin_width = 0.2
+    if result.radial_profiles:
+        inner = result.radial_profiles[0].radius_start
+        outer = result.radial_profiles[-1].radius_end
+        bin_width = result.radial_profiles[0].radius_end - result.radial_profiles[0].radius_start
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=(
+                "time",
+                "radius_start",
+                "radius_end",
+                "density",
+                "normal_velocity",
+                "inward_flux",
+                "valid_count",
+            ),
         )
+        writer.writeheader()
+        for sample in result.radial_profile_samples:
+            for index, density in enumerate(sample.densities):
+                radius_start = inner + index * bin_width
+                radius_end = min(outer, radius_start + bin_width)
+                normal_velocity = sample.normal_velocities[index]
+                writer.writerow(
+                    {
+                        "time": f"{sample.time:.12g}",
+                        "radius_start": f"{radius_start:.12g}",
+                        "radius_end": f"{radius_end:.12g}",
+                        "density": f"{density:.12g}",
+                        "normal_velocity": f"{normal_velocity:.12g}",
+                        "inward_flux": f"{density * abs(normal_velocity):.12g}",
+                        "valid_count": sample.valid_counts[index],
+                    }
+                )
+
+
+def write_radial_profiles(path: Path, result: SimulationResult) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=(
+                "radius_start",
+                "radius_end",
+                "density",
+                "normal_velocity",
+                "inward_flux",
+                "samples",
+                "particle_samples",
+            ),
+        )
+        writer.writeheader()
+        for radial_bin in result.radial_profiles:
+            writer.writerow(
+                {
+                    "radius_start": f"{radial_bin.radius_start:.12g}",
+                    "radius_end": f"{radial_bin.radius_end:.12g}",
+                    "density": f"{radial_bin.density:.12g}",
+                    "normal_velocity": f"{radial_bin.normal_velocity:.12g}",
+                    "inward_flux": f"{radial_bin.inward_flux:.12g}",
+                    "samples": radial_bin.samples,
+                    "particle_samples": radial_bin.particle_samples,
+                }
+            )
 
 
 def path_relative_to(path: Path, start: Path) -> Path:
@@ -275,4 +392,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
