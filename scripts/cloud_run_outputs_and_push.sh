@@ -43,7 +43,7 @@ ensure_clean_tracked_state() {
 }
 
 ensure_lfs_ready() {
-  if [[ "${PUBLISH_MODE}" != "lfs" ]]; then
+  if [[ "${PUBLISH_MODE}" != "lfs" && "${PUBLISH_MODE}" != "lfs-archive" ]]; then
     return
   fi
   if [[ "${USE_LFS}" != "1" ]]; then
@@ -60,6 +60,15 @@ ensure_release_ready() {
   gh --version >/dev/null 2>&1 || fail "GitHub CLI is required for PUBLISH_MODE=release."
   gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated."
   tar --version >/dev/null 2>&1 || true
+}
+
+sync_target_branch() {
+  git fetch "${REMOTE}" "${BRANCH}"
+  if git rev-parse --verify --quiet "${REMOTE}/${BRANCH}" >/dev/null; then
+    git merge --ff-only "${REMOTE}/${BRANCH}"
+  else
+    git merge --ff-only FETCH_HEAD
+  fi
 }
 
 run_and_log() {
@@ -168,13 +177,24 @@ write_release_notes() {
     echo "## Restore"
     echo
     echo "\`\`\`bash"
-    echo "mkdir -p outputs/downloaded-${RUN_STAMP}"
-    echo "gh release download ${RELEASE_TAG} --dir outputs/downloaded-${RUN_STAMP}"
-    echo "cd outputs/downloaded-${RUN_STAMP}"
+    if [[ "${PUBLISH_MODE}" == "release" ]]; then
+      echo "mkdir -p outputs/downloaded-${RUN_STAMP}"
+      echo "gh release download ${RELEASE_TAG} --dir outputs/downloaded-${RUN_STAMP}"
+      echo "cd outputs/downloaded-${RUN_STAMP}"
+    else
+      echo "git pull --ff-only"
+      echo "git lfs pull"
+      echo "cd ${ASSET_ROOT}"
+    fi
     echo "cat system2-tp4-final.tar.gz.part-* > system2-tp4-final.tar.gz 2>/dev/null || true"
     echo "cat tp3-final-grid.tar.gz.part-* > tp3-final-grid.tar.gz 2>/dev/null || true"
-    echo "tar -xzf system2-tp4-final.tar.gz -C ../.. 2>/dev/null || true"
-    echo "tar -xzf tp3-final-grid.tar.gz -C ../.. 2>/dev/null || true"
+    if [[ "${PUBLISH_MODE}" == "release" ]]; then
+      echo "tar -xzf system2-tp4-final.tar.gz -C ../.. 2>/dev/null || true"
+      echo "tar -xzf tp3-final-grid.tar.gz -C ../.. 2>/dev/null || true"
+    else
+      echo "tar -xzf system2-tp4-final.tar.gz -C ../../.. 2>/dev/null || true"
+      echo "tar -xzf tp3-final-grid.tar.gz -C ../../.. 2>/dev/null || true"
+    fi
     echo "\`\`\`"
   } >"${RELEASE_NOTES_PATH}"
 }
@@ -201,6 +221,11 @@ prepare_release_assets() {
   git add -f "${SUMMARY_PATH}" "outputs/script-tests-${RUN_STAMP}.log" "${CHECKSUM_PATH}" "${RELEASE_NOTES_PATH}"
 }
 
+stage_lfs_archives() {
+  prepare_release_assets
+  git add -f "${ASSET_ROOT}"
+}
+
 create_release() {
   local assets=()
   while IFS= read -r -d '' asset; do
@@ -223,8 +248,7 @@ ensure_clean_tracked_state
 ensure_lfs_ready
 ensure_release_ready
 
-git fetch "${REMOTE}" "${BRANCH}"
-git merge --ff-only "${REMOTE}/${BRANCH}"
+sync_target_branch
 
 mkdir -p "${SYSTEM2_ROOT}" "${TP3_ROOT}"
 run_and_log "script tests" "outputs/script-tests-${RUN_STAMP}.log" \
@@ -247,8 +271,10 @@ if [[ "${PUBLISH_MODE}" == "release" ]]; then
   prepare_release_assets
 elif [[ "${PUBLISH_MODE}" == "lfs" ]]; then
   stage_lfs_outputs
+elif [[ "${PUBLISH_MODE}" == "lfs-archive" ]]; then
+  stage_lfs_archives
 else
-  fail "Unknown PUBLISH_MODE=${PUBLISH_MODE}. Use release or lfs."
+  fail "Unknown PUBLISH_MODE=${PUBLISH_MODE}. Use release, lfs, or lfs-archive."
 fi
 
 if git diff --cached --quiet; then

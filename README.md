@@ -162,9 +162,18 @@ COMMIT_MESSAGE="data: add output release handoff" bash scripts/cloud_run_outputs
 PUBLISH_MODE=lfs bash scripts/cloud_run_outputs_and_push.sh
 ```
 
-`PUBLISH_MODE=lfs` is a fallback only. The default `release` mode is preferred
-for datasets larger than 1 GB because it avoids growing the Git history and
-does not depend on Git LFS quota.
+`PUBLISH_MODE=lfs-archive` is the no-`gh` fallback for Codex Cloud environments
+that cannot create GitHub Releases. It compresses each output tree, splits it
+into `1900m` chunks, commits those chunks with Git LFS, and avoids single-file
+LFS limits as long as each chunk stays below the GitHub LFS per-file limit.
+
+```bash
+PUBLISH_MODE=lfs-archive bash scripts/cloud_run_outputs_and_push.sh
+```
+
+`PUBLISH_MODE=lfs` tracks the raw output files directly with Git LFS. Use it
+only if individual raw files are comfortably below the account's Git LFS
+per-file limit.
 
 After the cloud run finishes, pull the handoff commit and download the assets:
 
@@ -176,6 +185,18 @@ cat system2-tp4-final.tar.gz.part-* > system2-tp4-final.tar.gz
 cat tp3-final-grid.tar.gz.part-* > tp3-final-grid.tar.gz
 tar -xzf system2-tp4-final.tar.gz -C ../..
 tar -xzf tp3-final-grid.tar.gz -C ../..
+```
+
+For `PUBLISH_MODE=lfs-archive`, restore with:
+
+```bash
+git pull --ff-only
+git lfs pull
+cd outputs/release-assets/<run-stamp>
+cat system2-tp4-final.tar.gz.part-* > system2-tp4-final.tar.gz
+cat tp3-final-grid.tar.gz.part-* > tp3-final-grid.tar.gz
+tar -xzf system2-tp4-final.tar.gz -C ../../..
+tar -xzf tp3-final-grid.tar.gz -C ../../..
 ```
 
 ## Python Analysis
