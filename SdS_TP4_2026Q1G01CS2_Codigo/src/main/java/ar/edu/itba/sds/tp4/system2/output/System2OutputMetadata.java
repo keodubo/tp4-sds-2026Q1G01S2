@@ -93,11 +93,22 @@ public record System2OutputMetadata(
                 + jsonField(indent, "full_contact_stride", fullContactStride) + ",\n"
                 + jsonField(indent, "obstacle_contact_stride", obstacleContactStride) + ",\n"
                 + jsonField(indent, "wall_contact_stride", obstacleContactStride) + ",\n"
+                + jsonField(indent, "boundary_event_stride", obstacleContactStride) + ",\n"
                 + jsonField(indent, "boundary_force_stride", boundaryForceStride) + ",\n"
                 + jsonField(
                         indent,
                         "state_sampling",
                         "states.csv includes steps divisible by state_stride or full_contact_stride"
+                ) + ",\n"
+                + jsonField(
+                        indent,
+                        "contact_sampling",
+                        "contacts.csv includes all active contacts only on full_contact_stride steps"
+                ) + ",\n"
+                + jsonField(
+                        indent,
+                        "contact_event_sampling",
+                        "contact_events.csv includes particle_obstacle_begin and particle_wall_begin at integration dt"
                 ) + ",\n"
                 + indent + "\"units\": {\n"
                 + jsonField(nestedIndent, "length", LENGTH_UNIT) + ",\n"

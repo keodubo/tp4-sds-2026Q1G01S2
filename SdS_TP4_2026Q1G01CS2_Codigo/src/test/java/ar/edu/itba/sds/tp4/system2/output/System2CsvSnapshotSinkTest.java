@@ -55,6 +55,7 @@ class System2CsvSnapshotSinkTest {
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.METADATA_FILE_NAME)));
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.STATES_FILE_NAME)));
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.CONTACTS_FILE_NAME)));
+        assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.CONTACT_EVENTS_FILE_NAME)));
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.BOUNDARY_FORCES_FILE_NAME)));
 
         List<String> states = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.STATES_FILE_NAME));
@@ -73,6 +74,12 @@ class System2CsvSnapshotSinkTest {
         assertEquals("-1.0", contactFields[7]);
         assertEquals(20.0, Double.parseDouble(contactFields[9]), 1e-12);
         assertEquals(-20.0, Double.parseDouble(contactFields[11]), 1e-12);
+
+        List<String> contactEvents = Files.readAllLines(
+                outputDirectory.resolve(System2CsvSnapshotSink.CONTACT_EVENTS_FILE_NAME)
+        );
+        assertEquals("step,t,event_type,particle_id,distance,overlap", contactEvents.get(0));
+        assertEquals("0,0.0,particle_obstacle_begin,0,1.8,0.19999999999999996", contactEvents.get(1));
 
         List<String> boundaryForces = Files.readAllLines(
                 outputDirectory.resolve(System2CsvSnapshotSink.BOUNDARY_FORCES_FILE_NAME)
@@ -106,7 +113,7 @@ class System2CsvSnapshotSinkTest {
     }
 
     @Test
-    void outputSamplingKeepsObstacleContactsAtEveryIntegrationStep() throws Exception {
+    void compactOutputWritesObstacleContactBeginEventsWithoutDumpingEveryBoundaryContact() throws Exception {
         System2ForceEvaluator evaluator = new System2ForceEvaluator(geometry, 100.0);
         System2OutputConfig outputConfig = new System2OutputConfig(2, 3, 2);
 
@@ -126,11 +133,15 @@ class System2CsvSnapshotSinkTest {
         assertTrue(states.get(3).startsWith("3,"));
 
         List<String> contacts = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.CONTACTS_FILE_NAME));
-        assertEquals(5, contacts.size());
+        assertEquals(3, contacts.size());
         assertTrue(contacts.get(1).startsWith("0,"));
-        assertTrue(contacts.get(2).startsWith("1,"));
-        assertTrue(contacts.get(3).startsWith("2,"));
-        assertTrue(contacts.get(4).startsWith("3,"));
+        assertTrue(contacts.get(2).startsWith("3,"));
+
+        List<String> contactEvents = Files.readAllLines(
+                outputDirectory.resolve(System2CsvSnapshotSink.CONTACT_EVENTS_FILE_NAME)
+        );
+        assertEquals(2, contactEvents.size());
+        assertEquals("0,0.0,particle_obstacle_begin,0,1.8,0.19999999999999996", contactEvents.get(1));
 
         List<String> boundaryForces = Files.readAllLines(
                 outputDirectory.resolve(System2CsvSnapshotSink.BOUNDARY_FORCES_FILE_NAME)
@@ -141,7 +152,7 @@ class System2CsvSnapshotSinkTest {
     }
 
     @Test
-    void outputSamplingKeepsWallContactsAtEveryIntegrationStepAndParticleContactsAtFullStride() throws Exception {
+    void compactOutputWritesWallContactBeginEventsAndKeepsFullContactsAtFullStride() throws Exception {
         System2ForceEvaluator evaluator = new System2ForceEvaluator(geometry, 100.0);
         System2OutputConfig outputConfig = new System2OutputConfig(2, 3, 2);
 
@@ -157,12 +168,58 @@ class System2CsvSnapshotSinkTest {
         }
 
         List<String> contacts = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.CONTACTS_FILE_NAME));
-        assertEquals(7, contacts.size());
-        assertEquals(4, contacts.stream().filter(line -> line.contains(",particle_wall,")).count());
+        assertEquals(5, contacts.size());
+        assertEquals(2, contacts.stream().filter(line -> line.contains(",particle_wall,")).count());
         assertEquals(2, contacts.stream().filter(line -> line.contains(",particle_particle,")).count());
-        assertTrue(contacts.stream().anyMatch(line -> line.startsWith("1,") && line.contains(",particle_wall,")));
+        assertTrue(contacts.stream().noneMatch(line -> line.startsWith("1,") && line.contains(",particle_wall,")));
         assertTrue(contacts.stream().noneMatch(line -> line.startsWith("1,") && line.contains(",particle_particle,")));
         assertTrue(contacts.stream().anyMatch(line -> line.startsWith("3,") && line.contains(",particle_particle,")));
+
+        List<String> contactEvents = Files.readAllLines(
+                outputDirectory.resolve(System2CsvSnapshotSink.CONTACT_EVENTS_FILE_NAME)
+        );
+        assertEquals(2, contactEvents.size());
+        assertEquals("0,0.0,particle_wall_begin,0,39.5,0.5", contactEvents.get(1));
+    }
+
+    @Test
+    void compactOutputWritesANewBoundaryEventOnlyAfterThePreviousEpisodeEnds() throws Exception {
+        System2ForceEvaluator evaluator = new System2ForceEvaluator(geometry, 100.0);
+        System2OutputConfig outputConfig = new System2OutputConfig(10, 10, 10);
+
+        try (System2CsvSnapshotSink sink = new System2CsvSnapshotSink(outputDirectory, metadata(), outputConfig)) {
+            sink.accept(new System2Snapshot(
+                    new System2State(0, 0.0, List.of(
+                            new DynamicParticle(0, new Vector2(1.8, 0.0), Vector2.ZERO, 1.0, 1.0)
+                    )),
+                    evaluator.evaluate(new System2State(0, 0.0, List.of(
+                            new DynamicParticle(0, new Vector2(1.8, 0.0), Vector2.ZERO, 1.0, 1.0)
+                    )))
+            ));
+            sink.accept(new System2Snapshot(
+                    new System2State(1, 0.1, List.of(
+                            new DynamicParticle(0, new Vector2(10.0, 0.0), Vector2.ZERO, 1.0, 1.0)
+                    )),
+                    evaluator.evaluate(new System2State(1, 0.1, List.of(
+                            new DynamicParticle(0, new Vector2(10.0, 0.0), Vector2.ZERO, 1.0, 1.0)
+                    )))
+            ));
+            sink.accept(new System2Snapshot(
+                    new System2State(2, 0.2, List.of(
+                            new DynamicParticle(0, new Vector2(1.8, 0.0), Vector2.ZERO, 1.0, 1.0)
+                    )),
+                    evaluator.evaluate(new System2State(2, 0.2, List.of(
+                            new DynamicParticle(0, new Vector2(1.8, 0.0), Vector2.ZERO, 1.0, 1.0)
+                    )))
+            ));
+        }
+
+        List<String> contactEvents = Files.readAllLines(
+                outputDirectory.resolve(System2CsvSnapshotSink.CONTACT_EVENTS_FILE_NAME)
+        );
+        assertEquals(3, contactEvents.size());
+        assertTrue(contactEvents.get(1).startsWith("0,0.0,particle_obstacle_begin,0,"));
+        assertTrue(contactEvents.get(2).startsWith("2,0.2,particle_obstacle_begin,0,"));
     }
 
     private System2OutputMetadata metadata() {

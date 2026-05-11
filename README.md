@@ -41,13 +41,14 @@ It writes raw simulation files under the configured output directory:
 - `metadata.json`
 - `states.csv`
 - `contacts.csv`
+- `contact_events.csv`
 - `boundary_forces.csv`
 
 System 2 output is sampled so the simulation can keep a small integration `dt` without producing unmanageable files:
 
 - `state_stride`: writes positions/velocities every `state_stride * dt`.
 - `full_contact_stride`: writes all contact types every `full_contact_stride * dt` for energy validation.
-- obstacle and outer-wall contacts are still written at every integration `dt`, so `Cfc(t)` and fresh/used state transitions can be reconstructed at the maximum temporal resolution required by the statement.
+- `contact_events.csv`: writes only the first `dt` of each obstacle/wall contact episode at the integration cadence, so `Cfc(t)` and fresh/used transitions keep the maximum temporal resolution required by the statement without dumping every active contact row.
 - `boundary_force_stride`: writes aggregate obstacle/wall forces at a sampled cadence.
 
 For heavy runs with `dt = 1e-4`, start with `state_stride = 5000`, `full_contact_stride = 5000`, and `boundary_force_stride = 5000`, then reduce the strides only if energy or radial-profile plots need more temporal detail.
@@ -308,6 +309,6 @@ Use `system` for the TP system number, `inciso` for the enunciado item, `artifac
 - [ ] Open `outputs/system1_figures/ecm_vs_dt.png` and check that it uses logarithmic axes and all four methods are distinguishable.
 - [ ] Read `outputs/system1_summary.md` and confirm the reported best method comes from the smallest generated `dt`.
 - [ ] Check `outputs/system1_outputs_manifest.csv` includes entries for incisos `1.1`, `1.2`, and `1.3`.
-- [ ] Run System 2 from `configs/system2.example.toml` and confirm `metadata.json`, `states.csv`, `contacts.csv`, and `boundary_forces.csv` are generated.
+- [ ] Run System 2 from `configs/system2.example.toml` and confirm `metadata.json`, `states.csv`, `contacts.csv`, `contact_events.csv`, and `boundary_forces.csv` are generated.
 - [ ] Run `system2-smoke` and confirm it completes without changing tracked files.
 - [ ] Before creating `SdS_TP4_2026Q1G01CS2_Codigo.zip`, verify it contains only the Java simulation motor source code and excludes `outputs/`, `analysis-python/`, figures, docs, and generated data.

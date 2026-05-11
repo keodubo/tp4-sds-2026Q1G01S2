@@ -42,6 +42,7 @@ class System2RunnerTest {
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.METADATA_FILE_NAME)));
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.STATES_FILE_NAME)));
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.CONTACTS_FILE_NAME)));
+        assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.CONTACT_EVENTS_FILE_NAME)));
         assertTrue(Files.exists(outputDirectory.resolve(System2CsvSnapshotSink.BOUNDARY_FORCES_FILE_NAME)));
 
         List<String> states = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.STATES_FILE_NAME));

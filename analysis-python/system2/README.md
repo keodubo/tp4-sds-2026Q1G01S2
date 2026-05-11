@@ -47,6 +47,6 @@ particle color.
 
 Future fresh/used coloring should be added only after the analysis layer either:
 
-- reconstructs the per-particle state from `contacts.csv`, counting only the
-  first `dt` of each obstacle-contact episode; or
+- reconstructs the per-particle state from `contact_events.csv`, using
+  `particle_obstacle_begin` and `particle_wall_begin` events; or
 - receives an explicit state column from a deliberate output-contract change.

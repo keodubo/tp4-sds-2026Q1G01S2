@@ -16,17 +16,22 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCloseable {
     public static final String METADATA_FILE_NAME = "metadata.json";
     public static final String STATES_FILE_NAME = "states.csv";
     public static final String CONTACTS_FILE_NAME = "contacts.csv";
+    public static final String CONTACT_EVENTS_FILE_NAME = "contact_events.csv";
     public static final String BOUNDARY_FORCES_FILE_NAME = "boundary_forces.csv";
 
     private final BufferedWriter statesWriter;
     private final BufferedWriter contactsWriter;
+    private final BufferedWriter contactEventsWriter;
     private final BufferedWriter boundaryForcesWriter;
     private final System2OutputConfig outputConfig;
+    private final Set<BoundaryContactKey> previousBoundaryContacts = new HashSet<>();
     private boolean closed;
 
     public System2CsvSnapshotSink(Path outputDirectory, System2OutputMetadata metadata) {
@@ -58,6 +63,10 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
             writeMetadata(outputDirectory.resolve(METADATA_FILE_NAME), metadata);
             statesWriter = Files.newBufferedWriter(outputDirectory.resolve(STATES_FILE_NAME), StandardCharsets.UTF_8);
             contactsWriter = Files.newBufferedWriter(outputDirectory.resolve(CONTACTS_FILE_NAME), StandardCharsets.UTF_8);
+            contactEventsWriter = Files.newBufferedWriter(
+                    outputDirectory.resolve(CONTACT_EVENTS_FILE_NAME),
+                    StandardCharsets.UTF_8
+            );
             boundaryForcesWriter = Files.newBufferedWriter(
                     outputDirectory.resolve(BOUNDARY_FORCES_FILE_NAME),
                     StandardCharsets.UTF_8
@@ -81,6 +90,7 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
             if (shouldWriteStateRows(snapshot.state().step())) {
                 writeStateRows(snapshot.state());
             }
+            writeContactEventRows(snapshot);
             writeContactRows(snapshot);
             if (isStrideStep(snapshot.state().step(), outputConfig.boundaryForceStride())) {
                 writeBoundaryForceRow(snapshot);
@@ -100,6 +110,7 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
             IOException failure = null;
             failure = closeCapturing(statesWriter, failure);
             failure = closeCapturing(contactsWriter, failure);
+            failure = closeCapturing(contactEventsWriter, failure);
             failure = closeCapturing(boundaryForcesWriter, failure);
             if (failure != null) {
                 throw failure;
@@ -115,6 +126,9 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
 
         contactsWriter.write("step,t,contact_type,i,j,distance,overlap,nx,ny,fx_i,fy_i,fx_j,fy_j");
         contactsWriter.newLine();
+
+        contactEventsWriter.write("step,t,event_type,particle_id,distance,overlap");
+        contactEventsWriter.newLine();
 
         boundaryForcesWriter.write("step,t,fx_obstacle,fy_obstacle,fx_wall,fy_wall,n_obstacle_contacts,n_wall_contacts");
         boundaryForcesWriter.newLine();
@@ -137,12 +151,11 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
 
     private void writeContactRows(System2Snapshot snapshot) throws IOException {
         System2State state = snapshot.state();
-        boolean fullContactStep = isStrideStep(state.step(), outputConfig.fullContactStride());
+        if (!isStrideStep(state.step(), outputConfig.fullContactStride())) {
+            return;
+        }
         for (ContactForce contactForce : snapshot.forces().snapshot().contactForces()) {
             Contact contact = contactForce.contact();
-            if (!fullContactStep && !isBoundaryStateTransitionContact(contact.type())) {
-                continue;
-            }
             Vector2 normal = contact.normalFromParticleToOther();
             Vector2 forceOnParticle = contactForce.forceOnParticle();
             Vector2 forceOnOther = contactForce.forceOnOtherBody();
@@ -164,6 +177,32 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
             ));
             contactsWriter.newLine();
         }
+    }
+
+    private void writeContactEventRows(System2Snapshot snapshot) throws IOException {
+        System2State state = snapshot.state();
+        Set<BoundaryContactKey> currentBoundaryContacts = new HashSet<>();
+        for (ContactForce contactForce : snapshot.forces().snapshot().contactForces()) {
+            Contact contact = contactForce.contact();
+            if (!isBoundaryStateTransitionContact(contact.type())) {
+                continue;
+            }
+            BoundaryContactKey key = new BoundaryContactKey(contact.type(), contact.particleId());
+            boolean firstBoundaryContactForParticleAndType = currentBoundaryContacts.add(key);
+            if (firstBoundaryContactForParticleAndType && !previousBoundaryContacts.contains(key)) {
+                contactEventsWriter.write(joinCsv(
+                        state.step(),
+                        state.time(),
+                        contactEventTypeName(contact.type()),
+                        contact.particleId(),
+                        contact.distance(),
+                        contact.overlap()
+                ));
+                contactEventsWriter.newLine();
+            }
+        }
+        previousBoundaryContacts.clear();
+        previousBoundaryContacts.addAll(currentBoundaryContacts);
     }
 
     private void writeBoundaryForceRow(System2Snapshot snapshot) throws IOException {
@@ -220,6 +259,14 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
         };
     }
 
+    private String contactEventTypeName(ContactType type) {
+        return switch (type) {
+            case PARTICLE_OBSTACLE -> "particle_obstacle_begin";
+            case PARTICLE_WALL -> "particle_wall_begin";
+            case PARTICLE_PARTICLE -> throw new IllegalArgumentException("particle-particle contacts are not events.");
+        };
+    }
+
     private String joinCsv(Object... values) {
         StringBuilder builder = new StringBuilder();
         for (int index = 0; index < values.length; index++) {
@@ -246,5 +293,8 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
             }
             return exception;
         }
+    }
+
+    private record BoundaryContactKey(ContactType type, int particleId) {
     }
 }
