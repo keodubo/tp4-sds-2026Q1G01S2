@@ -1,0 +1,23 @@
+[simulation]
+duration = 60.0
+seed = 42
+max_events = 200000
+
+[geometry]
+diameter = 80.0
+obstacle_radius = 1.0
+particle_radius = 1.0
+
+[particles]
+count = 10
+mass = 1.0
+speed = 1.0
+
+[output]
+path = "../../outputs/tp3-animation-smoke/snapshot.txt"
+snapshot_every = 1
+fresh_color = [0, 255, 0]
+used_color = [148, 0, 211]
+
+[observables]
+radial_bin_width = 0.2
