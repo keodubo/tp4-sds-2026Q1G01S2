@@ -1,0 +1,36 @@
+[geometry]
+diameter = 80.0
+obstacle_radius = 1.0
+particle_radius = 1.0
+
+[particles]
+count = 100
+mass = 1.0
+speed = 1.0
+
+[observables]
+radial_bin_width = 0.2
+
+[study]
+study_id = "tp3-final-grid"
+counts_mode = "explicit"
+counts = [100, 250, 500, 750, 1000]
+repetitions = 5
+seed_start = 12345
+runtime_duration = 500.0
+runtime_limit_seconds = 2000.0
+snapshot_every = 5000
+generate_figures = false
+artifacts_root = "../../outputs/tp3-reference"
+max_events = 100000000
+fresh_color = [0, 255, 0]
+used_color = [148, 0, 211]
+
+[reference]
+comparison_dt = 0.0001
+state_stride = 5000
+full_contact_stride = 5000
+boundary_force_stride = 5000
+sample_dt = 0.5
+note = "TP3 is event-driven; comparison_dt and strides document the TP4-compatible observation cadence, not a TP3 integration step."
+
