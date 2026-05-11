@@ -47,7 +47,7 @@ System 2 output is sampled so the simulation can keep a small integration `dt` w
 
 - `state_stride`: writes positions/velocities every `state_stride * dt`.
 - `full_contact_stride`: writes all contact types every `full_contact_stride * dt` for energy validation.
-- obstacle contacts are still written at every integration `dt`, so `Cfc(t)` can be reconstructed at the maximum temporal resolution required by the statement.
+- obstacle and outer-wall contacts are still written at every integration `dt`, so `Cfc(t)` and fresh/used state transitions can be reconstructed at the maximum temporal resolution required by the statement.
 - `boundary_force_stride`: writes aggregate obstacle/wall forces at a sampled cadence.
 
 For heavy runs with `dt = 1e-4`, start with `state_stride = 5000`, `full_contact_stride = 5000`, and `boundary_force_stride = 5000`, then reduce the strides only if energy or radial-profile plots need more temporal detail.
@@ -100,6 +100,30 @@ Run a short System 2 smoke case:
 cd SdS_TP4_2026Q1G01CS2_Codigo
 mvn exec:java -Dexec.args="system2-smoke ../outputs/system2-smoke"
 ```
+
+Prepare the TP4 System 2 sweep configs and manifest without running the heavy simulations:
+
+```bash
+python3 scripts/run_system2_sweep.py
+```
+
+Run the full required System 2 sweep after the dry-run looks correct:
+
+```bash
+python3 scripts/run_system2_sweep.py --execute
+```
+
+Default sweep:
+
+- `N = 100, 250, 500, 750, 1000`
+- `k = 100, 1000, 10000`
+- `5` seeds per `(N, k)` pair
+- `tf = 500 s`
+- `dt = 1e-4`
+- `state_stride = full_contact_stride = boundary_force_stride = 5000`
+
+This creates generated configs, raw outputs, and `manifest.csv` under
+`outputs/system2-sweeps/system2-tp4-final/`, which is ignored by git.
 
 ## Python Analysis
 

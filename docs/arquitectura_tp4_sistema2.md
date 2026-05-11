@@ -337,11 +337,12 @@ outputs/system2/<run_id>/
 ```
 
 Los archivos `states.csv` y `contacts.csv` deben compartir `step` y `t`. Para
-calcular correctamente `Cfc(t)`, los contactos con el obstaculo deben guardarse
-cada `dt`; no alcanza con snapshots visuales submuestreados. Los estados y los
-contactos completos pueden guardarse con strides configurables para mantener
-archivos razonables, siempre que los pasos usados para energia tengan tanto
-estado como contactos completos.
+calcular correctamente `Cfc(t)` y reconstruir las transiciones fresca/usada, los
+contactos con el obstaculo y con la pared externa deben guardarse cada `dt`; no
+alcanza con snapshots visuales submuestreados. Los estados y los contactos
+completos pueden guardarse con strides configurables para mantener archivos
+razonables, siempre que los pasos usados para energia tengan tanto estado como
+contactos completos.
 
 ### `metadata.json`
 
@@ -369,6 +370,7 @@ Debe contener al menos:
   "contact_stride": 5000,
   "full_contact_stride": 5000,
   "obstacle_contact_stride": 1,
+  "wall_contact_stride": 1,
   "boundary_force_stride": 5000,
   "units": {
     "length": "m",
@@ -421,9 +423,10 @@ No debe incluir:
 ### `contacts.csv`
 
 Una fila por contacto activo y por paso escrito. Para evitar archivos enormes,
-los contactos de tipo `particle_obstacle` se escriben cada `dt`, mientras que
-los contactos completos (`particle_particle`, `particle_obstacle` y
-`particle_wall`) se escriben en los pasos divisibles por `full_contact_stride`.
+los contactos de tipo `particle_obstacle` y `particle_wall` se escriben cada
+`dt`, mientras que los contactos completos (`particle_particle`,
+`particle_obstacle` y `particle_wall`) se escriben en los pasos divisibles por
+`full_contact_stride`.
 
 Columnas minimas:
 
@@ -450,12 +453,14 @@ Este archivo es la fuente de verdad para:
 
 - energia potencial elastica;
 - episodios de contacto con el obstaculo;
+- episodios de contacto con la pared externa que vuelven fresca a una particula usada;
 - fuerzas instantaneas de contacto;
 - validacion de accion y reaccion.
 
-Para `Cfc(t)`, usar todos los contactos `particle_obstacle`. Para energia,
-usar solo los pasos divisibles por `full_contact_stride`, donde el archivo tiene
-todos los tipos de contacto activos.
+Para `Cfc(t)` y para reconstruir fresca/usada, usar todos los contactos
+`particle_obstacle` y `particle_wall`. Para energia, usar solo los pasos
+divisibles por `full_contact_stride`, donde el archivo tiene todos los tipos de
+contacto activos.
 
 ### `boundary_forces.csv`
 
@@ -513,8 +518,8 @@ El analisis reconstruye esto asi:
 
 1. Inicializa todas las particulas como frescas.
 2. Lee `contacts.csv` ordenado por `step`.
-3. Para cada particula detecta si hay contacto `particle_obstacle` en el paso
-   actual.
+3. Para cada particula detecta si hay contacto `particle_obstacle` o
+   `particle_wall` en el paso actual.
 4. Un episodio empieza cuando:
 
 ```text
@@ -522,19 +527,25 @@ contact_now(i) == true
 contact_previous_step(i) == false
 ```
 
-5. Si la particula estaba fresca al inicio del episodio:
+5. Si empieza un episodio `particle_obstacle` y la particula estaba fresca:
 
 ```text
 Cfc = Cfc + 1
 used(i) = true
 ```
 
-6. Si la particula sigue en contacto durante varios `dt`, no se vuelve a
+6. Si empieza un episodio `particle_wall` y la particula estaba usada:
+
+```text
+used(i) = false
+```
+
+7. Si la particula sigue en contacto durante varios `dt`, no se vuelve a
    contar.
 
 Datos usados:
 
-- `contacts.csv` con contactos de obstaculo guardados cada `dt`;
+- `contacts.csv` con contactos de obstaculo y pared externa guardados cada `dt`;
 - `metadata.json` para `N`, `dt` y duracion de corrida.
 
 La bandera `used` no pertenece al motor porque no modifica las fuerzas ni el
@@ -701,9 +712,10 @@ La evolucion es por fuerza elastica y paso temporal fijo.
 
 ### 6. Frecuencia de output compatible con los observables
 
-Para `Cfc(t)`, guardar cada muchos pasos puede perder el primer `dt` del
-episodio de contacto. Por eso, para corridas usadas en el calculo de `J`, los
-contactos con obstaculo deben guardarse cada `dt`.
+Para `Cfc(t)` y para reconstruir fresca/usada, guardar cada muchos pasos puede
+perder el primer `dt` del episodio de contacto. Por eso, para corridas usadas en
+el calculo de `J`, los contactos con obstaculo y pared externa deben guardarse
+cada `dt`.
 
 Si se usa submuestreo para animaciones, debe ser otro output y no reemplazar la
 traza cruda usada para analisis.

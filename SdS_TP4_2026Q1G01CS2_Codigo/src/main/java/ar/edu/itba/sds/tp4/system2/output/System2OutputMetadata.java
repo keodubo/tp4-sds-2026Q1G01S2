@@ -92,6 +92,7 @@ public record System2OutputMetadata(
                 + jsonField(indent, "contact_stride", fullContactStride) + ",\n"
                 + jsonField(indent, "full_contact_stride", fullContactStride) + ",\n"
                 + jsonField(indent, "obstacle_contact_stride", obstacleContactStride) + ",\n"
+                + jsonField(indent, "wall_contact_stride", obstacleContactStride) + ",\n"
                 + jsonField(indent, "boundary_force_stride", boundaryForceStride) + ",\n"
                 + jsonField(
                         indent,

@@ -37,6 +37,7 @@ class System2CsvSnapshotSinkTest {
         assertTrue(json.contains("\"R\": 40.0"));
         assertTrue(json.contains("\"k\": 100.0"));
         assertTrue(json.contains("\"integrator\": \"velocity_verlet\""));
+        assertTrue(json.contains("\"wall_contact_stride\": 1"));
         assertTrue(json.contains("\"normal_convention\""));
     }
 
@@ -137,6 +138,31 @@ class System2CsvSnapshotSinkTest {
         assertEquals(3, boundaryForces.size());
         assertTrue(boundaryForces.get(1).startsWith("0,"));
         assertTrue(boundaryForces.get(2).startsWith("2,"));
+    }
+
+    @Test
+    void outputSamplingKeepsWallContactsAtEveryIntegrationStepAndParticleContactsAtFullStride() throws Exception {
+        System2ForceEvaluator evaluator = new System2ForceEvaluator(geometry, 100.0);
+        System2OutputConfig outputConfig = new System2OutputConfig(2, 3, 2);
+
+        try (System2CsvSnapshotSink sink = new System2CsvSnapshotSink(outputDirectory, metadata(), outputConfig)) {
+            for (int step = 0; step <= 3; step++) {
+                System2State state = new System2State(step, step * 0.1, List.of(
+                        new DynamicParticle(0, new Vector2(39.5, 0.0), Vector2.ZERO, 1.0, 1.0),
+                        new DynamicParticle(1, new Vector2(10.0, 0.0), Vector2.ZERO, 1.0, 1.0),
+                        new DynamicParticle(2, new Vector2(11.5, 0.0), Vector2.ZERO, 1.0, 1.0)
+                ));
+                sink.accept(new System2Snapshot(state, evaluator.evaluate(state)));
+            }
+        }
+
+        List<String> contacts = Files.readAllLines(outputDirectory.resolve(System2CsvSnapshotSink.CONTACTS_FILE_NAME));
+        assertEquals(7, contacts.size());
+        assertEquals(4, contacts.stream().filter(line -> line.contains(",particle_wall,")).count());
+        assertEquals(2, contacts.stream().filter(line -> line.contains(",particle_particle,")).count());
+        assertTrue(contacts.stream().anyMatch(line -> line.startsWith("1,") && line.contains(",particle_wall,")));
+        assertTrue(contacts.stream().noneMatch(line -> line.startsWith("1,") && line.contains(",particle_particle,")));
+        assertTrue(contacts.stream().anyMatch(line -> line.startsWith("3,") && line.contains(",particle_particle,")));
     }
 
     private System2OutputMetadata metadata() {

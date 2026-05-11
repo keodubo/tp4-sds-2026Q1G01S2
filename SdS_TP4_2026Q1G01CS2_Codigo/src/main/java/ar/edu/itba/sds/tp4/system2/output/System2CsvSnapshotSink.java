@@ -140,7 +140,7 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
         boolean fullContactStep = isStrideStep(state.step(), outputConfig.fullContactStride());
         for (ContactForce contactForce : snapshot.forces().snapshot().contactForces()) {
             Contact contact = contactForce.contact();
-            if (!fullContactStep && contact.type() != ContactType.PARTICLE_OBSTACLE) {
+            if (!fullContactStep && !isBoundaryStateTransitionContact(contact.type())) {
                 continue;
             }
             Vector2 normal = contact.normalFromParticleToOther();
@@ -198,6 +198,10 @@ public final class System2CsvSnapshotSink implements System2SnapshotSink, AutoCl
 
     private boolean isStrideStep(long step, int stride) {
         return step % stride == 0;
+    }
+
+    private boolean isBoundaryStateTransitionContact(ContactType type) {
+        return type == ContactType.PARTICLE_OBSTACLE || type == ContactType.PARTICLE_WALL;
     }
 
     private String contactOtherBodyName(Contact contact) {
