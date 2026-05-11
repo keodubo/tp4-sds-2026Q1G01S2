@@ -125,6 +125,55 @@ Default sweep:
 This creates generated configs, raw outputs, and `manifest.csv` under
 `outputs/system2-sweeps/system2-tp4-final/`, which is ignored by git.
 
+## Local Output Run
+
+For a local overnight run that does not push, create releases, or use Git LFS:
+
+```bash
+caffeinate -dimsu bash scripts/local_run_outputs.sh
+```
+
+Check the local wrapper without running heavy simulations:
+
+```bash
+PRECHECK_ONLY=1 PACKAGE_OUTPUTS=0 bash scripts/local_run_outputs.sh
+```
+
+By default this runs:
+
+- TP4 System 2 final sweep: `75` runs = `5 N` values * `3 k` values * `5` seeds.
+- TP3 reference sweep: `25` runs = `5 N` values * `5` seeds.
+- script-level unit tests before the heavy run.
+- optional compressed split archives under `outputs/local-archives/<run-stamp>/`.
+
+Useful local overrides:
+
+```bash
+RUN_TP3=0 caffeinate -dimsu bash scripts/local_run_outputs.sh
+RUN_TP4=0 caffeinate -dimsu bash scripts/local_run_outputs.sh
+PACKAGE_OUTPUTS=0 caffeinate -dimsu bash scripts/local_run_outputs.sh
+```
+
+The main local outputs are:
+
+```text
+outputs/system2-sweeps/system2-tp4-final/
+outputs/tp3-reference/tp3-final-grid/
+outputs/local-run-summary-*.txt
+outputs/local-script-tests-*.log
+outputs/local-archives/<run-stamp>/
+```
+
+If `PACKAGE_OUTPUTS=1`, restore an archive with:
+
+```bash
+cd outputs/local-archives/<run-stamp>
+cat system2-tp4-final.tar.gz.part-* > system2-tp4-final.tar.gz
+cat tp3-final-grid.tar.gz.part-* > tp3-final-grid.tar.gz
+tar -xzf system2-tp4-final.tar.gz -C ../../..
+tar -xzf tp3-final-grid.tar.gz -C ../../..
+```
+
 ## Codex Cloud Output Run
 
 For an overnight cloud run that generates the final raw outputs, publishes them
