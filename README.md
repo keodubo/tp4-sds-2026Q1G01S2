@@ -127,8 +127,9 @@ This creates generated configs, raw outputs, and `manifest.csv` under
 
 ## Codex Cloud Output Run
 
-For an overnight cloud run that generates the final raw outputs and pushes them
-back to the current branch, use:
+For an overnight cloud run that generates the final raw outputs, publishes them
+as GitHub Release assets, and pushes a small handoff commit to the current
+branch, use:
 
 ```bash
 bash scripts/cloud_run_outputs_and_push.sh
@@ -139,16 +140,17 @@ By default this runs:
 - TP4 System 2 final sweep: `75` runs = `5 N` values * `3 k` values * `5` seeds.
 - TP3 reference sweep: `25` runs = `5 N` values * `5` seeds, with `snapshot.txt`, `center_contacts.csv`, `used_fraction.csv`, `radial_profile_samples.csv`, `radial_profiles.csv`, and `metadata.json` per run.
 - script-level unit tests before the heavy run.
-- Git LFS setup for large raw `.csv`, `.txt`, and `.log` files under the final output folders.
-- a final commit and push with message `data: add TP3 and TP4 simulation outputs`.
+- compressed split release assets under a tag like `tp4-outputs-YYYYMMDDTHHMMSSZ`.
+- a final handoff commit and push with summary, release notes, and SHA-256 checksums.
 
-The script keeps `outputs/` ignored for normal local work and force-adds only:
+The script keeps `outputs/` ignored for normal local work and force-adds only
+small handoff files:
 
 ```text
-outputs/system2-sweeps/system2-tp4-final/
-outputs/tp3-reference/tp3-final-grid/
 outputs/cloud-run-summary-*.txt
 outputs/script-tests-*.log
+outputs/release-assets/*/SHA256SUMS.txt
+outputs/release-assets/*/release-notes.md
 ```
 
 Useful environment overrides:
@@ -156,11 +158,25 @@ Useful environment overrides:
 ```bash
 RUN_TP3=0 bash scripts/cloud_run_outputs_and_push.sh
 RUN_TP4=0 bash scripts/cloud_run_outputs_and_push.sh
-COMMIT_MESSAGE="data: add final simulation outputs" bash scripts/cloud_run_outputs_and_push.sh
+COMMIT_MESSAGE="data: add output release handoff" bash scripts/cloud_run_outputs_and_push.sh
+PUBLISH_MODE=lfs bash scripts/cloud_run_outputs_and_push.sh
 ```
 
-After pulling the generated outputs locally, run `git lfs pull` if Git LFS did
-not download the large files automatically.
+`PUBLISH_MODE=lfs` is a fallback only. The default `release` mode is preferred
+for datasets larger than 1 GB because it avoids growing the Git history and
+does not depend on Git LFS quota.
+
+After the cloud run finishes, pull the handoff commit and download the assets:
+
+```bash
+git pull --ff-only
+gh release download <release-tag> --dir outputs/downloaded-<release-tag>
+cd outputs/downloaded-<release-tag>
+cat system2-tp4-final.tar.gz.part-* > system2-tp4-final.tar.gz
+cat tp3-final-grid.tar.gz.part-* > tp3-final-grid.tar.gz
+tar -xzf system2-tp4-final.tar.gz -C ../..
+tar -xzf tp3-final-grid.tar.gz -C ../..
+```
 
 ## Python Analysis
 

@@ -1,5 +1,5 @@
-# Final simulation outputs are generated in Codex Cloud and committed for handoff.
-# Keep these large raw files in Git LFS instead of normal Git history.
+# Fallback only: prefer GitHub Releases for large final output handoff.
+# If PUBLISH_MODE=lfs is used, keep large raw files out of normal Git history.
 /outputs/system2-sweeps/system2-tp4-final/**/*.csv filter=lfs diff=lfs merge=lfs -text
 /outputs/system2-sweeps/system2-tp4-final/**/*.txt filter=lfs diff=lfs merge=lfs -text
 /outputs/system2-sweeps/system2-tp4-final/**/*.log filter=lfs diff=lfs merge=lfs -text
