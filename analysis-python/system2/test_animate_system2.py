@@ -40,6 +40,39 @@ class AnimateSystem2Test(unittest.TestCase):
             self.assertEqual([0, 1], [particle.particle_id for particle in run.frames[0].particles])
             self.assertEqual(4.0, run.frames[1].particles[1].x)
 
+    def test_load_system2_run_reconstructs_fresh_used_state_from_contact_events(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            input_dir = Path(temp_dir)
+            write_metadata(input_dir / "metadata.json")
+            write_states(
+                input_dir / "states.csv",
+                [
+                    "step,t,particle_id,x,y,vx,vy",
+                    "0,0.0,0,1.0,0.0,0.1,0.2",
+                    "0,0.0,1,2.0,0.0,0.3,0.4",
+                    "10,1.0,0,1.5,0.0,0.1,0.2",
+                    "10,1.0,1,2.5,0.0,0.3,0.4",
+                    "20,2.0,0,2.0,0.0,0.1,0.2",
+                    "20,2.0,1,3.0,0.0,0.3,0.4",
+                ],
+            )
+            write_contact_events(
+                input_dir / "contact_events.csv",
+                [
+                    "step,t,event_type,particle_id,distance,overlap",
+                    "5,0.5,particle_obstacle_begin,0,1.9,0.1",
+                    "15,1.5,particle_wall_begin,0,39.2,0.2",
+                ],
+            )
+
+            run = load_system2_run(input_dir)
+
+            self.assertTrue(run.supports_state_coloring)
+            self.assertFalse(run.frames[0].particles[0].used)
+            self.assertTrue(run.frames[1].particles[0].used)
+            self.assertFalse(run.frames[2].particles[0].used)
+            self.assertFalse(run.frames[1].particles[1].used)
+
     def test_read_state_frames_rejects_missing_required_columns(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             states_path = Path(temp_dir) / "states.csv"
@@ -83,6 +116,10 @@ def write_metadata(path: Path) -> None:
 
 
 def write_states(path: Path, lines: list[str]) -> None:
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_contact_events(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 

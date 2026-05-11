@@ -11,6 +11,11 @@ from typing import Iterable, Sequence
 
 REQUIRED_STATE_COLUMNS = ("step", "t", "particle_id", "x", "y", "vx", "vy")
 STATE_COLOR_COLUMNS = ("state", "particle_state")
+CONTACT_EVENTS_FILE_NAME = "contact_events.csv"
+OBSTACLE_EVENT = "particle_obstacle_begin"
+WALL_EVENT = "particle_wall_begin"
+FRESH_COLOR = "#2f9e44"
+USED_COLOR = "#8a2be2"
 
 
 @dataclass(frozen=True)
@@ -31,6 +36,7 @@ class ParticleState:
     y: float
     vx: float
     vy: float
+    used: bool = False
 
 
 @dataclass(frozen=True)
@@ -47,14 +53,24 @@ class System2RunData:
     supports_state_coloring: bool
 
 
+@dataclass(frozen=True)
+class ContactEvent:
+    step: int
+    event_type: str
+    particle_id: int
+
+
 def load_system2_run(input_dir: Path) -> System2RunData:
     input_dir = Path(input_dir)
     metadata = load_metadata(input_dir / "metadata.json")
     frames, state_columns = read_state_frames_with_columns(input_dir / "states.csv")
+    contact_events_path = input_dir / CONTACT_EVENTS_FILE_NAME
+    if contact_events_path.exists():
+        frames = apply_contact_events_to_frames(frames, read_contact_events(contact_events_path))
     return System2RunData(
         metadata=metadata,
         frames=frames,
-        supports_state_coloring=detect_state_coloring_support(state_columns),
+        supports_state_coloring=detect_state_coloring_support(state_columns) or contact_events_path.exists(),
     )
 
 
@@ -133,6 +149,64 @@ def read_state_frames_with_columns(path: Path) -> tuple[tuple[AnimationFrame, ..
     return frames, fieldnames
 
 
+def read_contact_events(path: Path) -> tuple[ContactEvent, ...]:
+    with path.open(newline="", encoding="utf-8") as events_file:
+        reader = csv.DictReader(events_file)
+        fieldnames = tuple(reader.fieldnames or ())
+        required_columns = ("step", "event_type", "particle_id")
+        missing = [column for column in required_columns if column not in fieldnames]
+        if missing:
+            raise ValueError("contact_events.csv missing required columns: " + ", ".join(missing))
+
+        events: list[ContactEvent] = []
+        for row_number, record in enumerate(reader, start=2):
+            try:
+                step = int(record["step"])
+                particle_id = int(record["particle_id"])
+            except ValueError as exception:
+                raise ValueError(f"invalid numeric value in contact_events.csv row {row_number}") from exception
+            event_type = record["event_type"]
+            if event_type not in {OBSTACLE_EVENT, WALL_EVENT}:
+                continue
+            events.append(ContactEvent(step=step, event_type=event_type, particle_id=particle_id))
+    return tuple(sorted(events, key=lambda event: event.step))
+
+
+def apply_contact_events_to_frames(
+    frames: Sequence[AnimationFrame],
+    events: Sequence[ContactEvent],
+) -> tuple[AnimationFrame, ...]:
+    used_particle_ids: set[int] = set()
+    event_index = 0
+    updated_frames: list[AnimationFrame] = []
+    for frame in frames:
+        while event_index < len(events) and events[event_index].step <= frame.step:
+            event = events[event_index]
+            if event.event_type == OBSTACLE_EVENT:
+                used_particle_ids.add(event.particle_id)
+            elif event.event_type == WALL_EVENT:
+                used_particle_ids.discard(event.particle_id)
+            event_index += 1
+        updated_frames.append(
+            AnimationFrame(
+                step=frame.step,
+                time=frame.time,
+                particles=tuple(
+                    ParticleState(
+                        particle_id=particle.particle_id,
+                        x=particle.x,
+                        y=particle.y,
+                        vx=particle.vx,
+                        vy=particle.vy,
+                        used=particle.particle_id in used_particle_ids,
+                    )
+                    for particle in frame.particles
+                ),
+            )
+        )
+    return tuple(updated_frames)
+
+
 def detect_state_coloring_support(columns: Iterable[str]) -> bool:
     normalized = {column.strip().lower() for column in columns}
     return any(column in normalized for column in STATE_COLOR_COLUMNS) or {"fresh", "used"}.issubset(normalized)
@@ -201,7 +275,7 @@ def write_animation(
         [particle.x for particle in first_frame.particles],
         [particle.y for particle in first_frame.particles],
         s=particle_size,
-        c="#2775d1",
+        c=colors_for_frame(first_frame, run.supports_state_coloring),
         edgecolors="#0c2f57",
         linewidths=0.35,
         alpha=0.88,
@@ -222,6 +296,7 @@ def write_animation(
     def update(frame_index: int):
         frame = selected_frames[frame_index]
         scatter.set_offsets([(particle.x, particle.y) for particle in frame.particles])
+        scatter.set_color(colors_for_frame(frame, run.supports_state_coloring))
         time_text.set_text(f"step={frame.step}   t={frame.time:.6g} s   N={len(frame.particles)}")
         return scatter, time_text
 
@@ -251,6 +326,12 @@ def select_frames(
             raise ValueError("max_frames must be positive when provided")
         selected = selected[:max_frames]
     return selected
+
+
+def colors_for_frame(frame: AnimationFrame, supports_state_coloring: bool) -> list[str]:
+    if not supports_state_coloring:
+        return ["#2775d1" for _ in frame.particles]
+    return [USED_COLOR if particle.used else FRESH_COLOR for particle in frame.particles]
 
 
 def scatter_size_for_particle_radius(axis, particle_radius: float) -> float:

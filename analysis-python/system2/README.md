@@ -6,6 +6,7 @@ The script reads:
 
 - `metadata.json`
 - `states.csv`
+- `contact_events.csv` when present, to color particles as fresh/used
 
 It does not run or modify the Java simulation motor.
 
@@ -33,20 +34,20 @@ python3 analysis-python/system2/animate_system2.py \
 By default the script refuses to replace an existing output file. Use
 `--overwrite` only when intentionally regenerating the same animation.
 
-## Current State Coloring Gap
+## State Coloring
 
-The current Java output contract writes `states.csv` with:
+The Java output contract writes `states.csv` with:
 
 ```text
 step,t,particle_id,x,y,vx,vy
 ```
 
-It does not export `fresh`, `used`, or `state` columns. For that reason this
-first animation version renders a plain position/movement animation with one
-particle color.
+It does not export `fresh`, `used`, or `state` columns directly. When
+`contact_events.csv` exists, the animation reconstructs state from:
 
-Future fresh/used coloring should be added only after the analysis layer either:
+- `particle_obstacle_begin`: marks a particle as used.
+- `particle_wall_begin`: marks a particle as fresh again.
 
-- reconstructs the per-particle state from `contact_events.csv`, using
-  `particle_obstacle_begin` and `particle_wall_begin` events; or
-- receives an explicit state column from a deliberate output-contract change.
+Particles are rendered green while fresh and purple while used. If
+`contact_events.csv` is missing, the script falls back to a plain position
+animation with one particle color.
