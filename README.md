@@ -155,6 +155,23 @@ RUN_TP4=0 caffeinate -dimsu bash scripts/local_run_outputs.sh
 PACKAGE_OUTPUTS=0 caffeinate -dimsu bash scripts/local_run_outputs.sh
 ```
 
+If a local run is interrupted, resume from existing complete outputs instead of
+starting from zero:
+
+```bash
+caffeinate -dimsu bash scripts/local_resume_outputs.sh
+```
+
+Equivalent explicit form:
+
+```bash
+RESUME=1 PACKAGE_OUTPUTS=0 caffeinate -dimsu bash scripts/local_run_outputs.sh
+```
+
+Resume mode skips a run only when all expected raw files exist and the metadata
+matches the requested grid. Partial or mismatched run folders are generated
+again.
+
 The main local outputs are:
 
 ```text

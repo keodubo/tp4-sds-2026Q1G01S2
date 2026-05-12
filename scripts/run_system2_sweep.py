@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
+import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +14,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 JAVA_PROJECT_DIR = PROJECT_ROOT / "SdS_TP4_2026Q1G01CS2_Codigo"
 DEFAULT_PARTICLE_COUNTS = (100, 250, 500, 750, 1000)
 REQUIRED_STIFFNESS_VALUES = (100.0, 1000.0, 10000.0)
+REQUIRED_OUTPUT_FILES = (
+    "metadata.json",
+    "states.csv",
+    "contacts.csv",
+    "contact_events.csv",
+    "boundary_forces.csv",
+)
 
 
 @dataclass(frozen=True)
@@ -155,17 +164,109 @@ def write_configs_and_manifest(runs: list[RunSpec]) -> Path:
     return manifest_path
 
 
-def run_sweep(runs: list[RunSpec], skip_tests: bool) -> None:
+def run_sweep(runs: list[RunSpec], skip_tests: bool, resume: bool = False) -> None:
     if not skip_tests:
         subprocess.run(["mvn", "test"], cwd=JAVA_PROJECT_DIR, check=True)
 
+    skipped = 0
     for index, run in enumerate(runs, start=1):
+        if resume and is_run_complete(run):
+            skipped += 1
+            print(f"[{index}/{len(runs)}] {run.run_id} SKIP complete existing output", flush=True)
+            continue
         print(f"[{index}/{len(runs)}] {run.run_id}", flush=True)
         subprocess.run(
             ["mvn", "exec:java", f"-Dexec.args=system2 {(PROJECT_ROOT / run.config_path).as_posix()}"],
             cwd=JAVA_PROJECT_DIR,
             check=True,
         )
+    if resume:
+        print(f"Resume skipped {skipped}/{len(runs)} complete runs.", flush=True)
+
+
+def is_run_complete(run: RunSpec) -> bool:
+    output_dir = absolute_project_path(run.output_dir)
+    if not all((output_dir / file_name).is_file() for file_name in REQUIRED_OUTPUT_FILES):
+        return False
+    if any((output_dir / file_name).stat().st_size == 0 for file_name in REQUIRED_OUTPUT_FILES):
+        return False
+
+    metadata = load_json_file(output_dir / "metadata.json")
+    if metadata is None:
+        return False
+    settings = run.settings
+    expected_values: dict[str, object] = {
+        "run_id": run.run_id,
+        "realization": run.realization,
+        "seed": run.seed,
+        "N": run.particle_count,
+        "k": run.stiffness,
+        "dt": settings.dt,
+        "steps": settings.steps,
+        "state_stride": settings.state_stride,
+        "full_contact_stride": settings.full_contact_stride,
+        "boundary_force_stride": settings.boundary_force_stride,
+    }
+    for key, expected in expected_values.items():
+        if key not in metadata or not metadata_value_matches(metadata[key], expected):
+            return False
+
+    final_state_step = last_csv_step(output_dir / "states.csv")
+    return final_state_step == settings.steps
+
+
+def load_json_file(path: Path) -> dict[str, object] | None:
+    try:
+        with path.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def metadata_value_matches(actual: object, expected: object) -> bool:
+    if isinstance(expected, float):
+        try:
+            return abs(float(actual) - expected) <= max(1e-9, abs(expected) * 1e-9)
+        except (TypeError, ValueError):
+            return False
+    return actual == expected
+
+
+def last_csv_step(path: Path) -> int | None:
+    last_line = read_last_nonempty_line(path)
+    if last_line is None:
+        return None
+    try:
+        with path.open(encoding="utf-8", newline="") as handle:
+            header = handle.readline().strip()
+        record = next(csv.DictReader([header, last_line]))
+        return int(record["step"])
+    except (OSError, KeyError, StopIteration, ValueError, csv.Error):
+        return None
+
+
+def read_last_nonempty_line(path: Path) -> str | None:
+    try:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            position = handle.tell()
+            buffer = b""
+            while position > 0:
+                read_size = min(4096, position)
+                position -= read_size
+                handle.seek(position)
+                buffer = handle.read(read_size) + buffer
+                lines = [line for line in buffer.splitlines() if line.strip()]
+                if len(lines) >= 2 or position == 0:
+                    return lines[-1].decode("utf-8")
+    except OSError:
+        return None
+    return None
+
+
+def absolute_project_path(path: Path) -> Path:
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def relative_output_dir_for_config(run: RunSpec) -> str:
@@ -204,6 +305,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--boundary-force-stride", type=int, default=5000)
     parser.add_argument("--execute", action="store_true", help="Run Maven simulations after writing configs.")
     parser.add_argument("--skip-preflight-tests", action="store_true", help="Skip mvn test before --execute.")
+    parser.add_argument("--resume", action="store_true", help="Skip runs whose existing raw outputs are complete.")
     return parser.parse_args()
 
 
@@ -230,7 +332,7 @@ def main() -> int:
     print(f"tf={settings.final_time:g} dt={settings.dt:g} steps={settings.steps}")
 
     if args.execute:
-        run_sweep(runs, skip_tests=args.skip_preflight_tests)
+        run_sweep(runs, skip_tests=args.skip_preflight_tests, resume=args.resume)
     else:
         print("Dry-run only. Add --execute to run the simulations.")
     return 0

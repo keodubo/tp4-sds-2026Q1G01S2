@@ -9,6 +9,7 @@ RUN_TP4="${RUN_TP4:-1}"
 RUN_TP3="${RUN_TP3:-1}"
 PRECHECK_ONLY="${PRECHECK_ONLY:-0}"
 PACKAGE_OUTPUTS="${PACKAGE_OUTPUTS:-1}"
+RESUME="${RESUME:-0}"
 RUN_STAMP="${RUN_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
 PART_SIZE="${PART_SIZE:-1900m}"
 
@@ -79,6 +80,7 @@ write_summary() {
     echo "git_head=$(git rev-parse HEAD)"
     echo "run_tp4=${RUN_TP4}"
     echo "run_tp3=${RUN_TP3}"
+    echo "resume=${RESUME}"
     echo "precheck_only=${PRECHECK_ONLY}"
     echo "package_outputs=${PACKAGE_OUTPUTS}"
     echo
@@ -132,7 +134,7 @@ if [[ "${RUN_TP4}" != "1" && "${RUN_TP3}" != "1" ]]; then
 fi
 
 echo "Starting local output run ${RUN_STAMP}."
-echo "RUN_TP4=${RUN_TP4} RUN_TP3=${RUN_TP3} PRECHECK_ONLY=${PRECHECK_ONLY} PACKAGE_OUTPUTS=${PACKAGE_OUTPUTS}"
+echo "RUN_TP4=${RUN_TP4} RUN_TP3=${RUN_TP3} RESUME=${RESUME} PRECHECK_ONLY=${PRECHECK_ONLY} PACKAGE_OUTPUTS=${PACKAGE_OUTPUTS}"
 
 mkdir -p "${SYSTEM2_ROOT}" "${TP3_ROOT}"
 run_and_log "script tests" "${SCRIPT_TEST_LOG}" \
@@ -153,13 +155,21 @@ if [[ "${PRECHECK_ONLY}" == "1" ]]; then
 fi
 
 if [[ "${RUN_TP4}" == "1" ]]; then
+  system2_args=(scripts/run_system2_sweep.py --execute)
+  if [[ "${RESUME}" == "1" ]]; then
+    system2_args+=(--resume)
+  fi
   run_and_log "TP4 System 2 full sweep" "${SYSTEM2_ROOT}/local-run-${RUN_STAMP}.log" \
-    python3 scripts/run_system2_sweep.py --execute
+    python3 "${system2_args[@]}"
 fi
 
 if [[ "${RUN_TP3}" == "1" ]]; then
+  tp3_args=(scripts/run_tp3_reference_sweep.py --execute)
+  if [[ "${RESUME}" == "1" ]]; then
+    tp3_args+=(--resume)
+  fi
   run_and_log "TP3 reference sweep" "${TP3_ROOT}/local-run-${RUN_STAMP}.log" \
-    python3 scripts/run_tp3_reference_sweep.py --execute
+    python3 "${tp3_args[@]}"
 fi
 
 package_outputs

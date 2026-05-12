@@ -7,7 +7,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from animate_system2 import (
+    animation_title,
     detect_state_coloring_support,
+    format_stiffness,
     load_system2_run,
     read_state_frames,
 )
@@ -35,10 +37,12 @@ class AnimateSystem2Test(unittest.TestCase):
             self.assertEqual(1.0, run.metadata.obstacle_radius)
             self.assertEqual(1.0, run.metadata.particle_radius)
             self.assertEqual(2, run.metadata.particle_count)
+            self.assertEqual(1000.0, run.metadata.stiffness)
             self.assertFalse(run.supports_state_coloring)
             self.assertEqual([0, 10], [frame.step for frame in run.frames])
             self.assertEqual([0, 1], [particle.particle_id for particle in run.frames[0].particles])
             self.assertEqual(4.0, run.frames[1].particles[1].x)
+            self.assertEqual("TP4 - N=2 - K=10e3", animation_title(run.metadata))
 
     def test_load_system2_run_reconstructs_fresh_used_state_from_contact_events(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -96,6 +100,12 @@ class AnimateSystem2Test(unittest.TestCase):
         self.assertTrue(detect_state_coloring_support(state_column))
         self.assertTrue(detect_state_coloring_support(fresh_used_columns))
 
+    def test_format_stiffness_uses_requested_power_label_for_powers_of_ten(self):
+        self.assertEqual("10e2", format_stiffness(100.0))
+        self.assertEqual("10e3", format_stiffness(1000.0))
+        self.assertEqual("10e4", format_stiffness(10000.0))
+        self.assertEqual("750", format_stiffness(750.0))
+
 
 def write_metadata(path: Path) -> None:
     path.write_text(
@@ -104,6 +114,7 @@ def write_metadata(path: Path) -> None:
                 "system": "system2",
                 "run_id": "unit",
                 "N": 2,
+                "k": 1000.0,
                 "R": 40.0,
                 "obstacle_radius": 1.0,
                 "particle_radius": 1.0,

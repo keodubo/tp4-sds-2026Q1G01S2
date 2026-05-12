@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -22,6 +23,7 @@ USED_COLOR = "#8a2be2"
 class System2AnimationMetadata:
     run_id: str
     particle_count: int
+    stiffness: float | None
     outer_radius: float
     obstacle_radius: float
     particle_radius: float
@@ -89,6 +91,7 @@ def load_metadata(path: Path) -> System2AnimationMetadata:
     return System2AnimationMetadata(
         run_id=str(raw_metadata.get("run_id", path.parent.name)),
         particle_count=int(raw_metadata["N"]),
+        stiffness=float(raw_metadata["k"]) if "k" in raw_metadata else None,
         outer_radius=float(raw_metadata["R"]),
         obstacle_radius=float(raw_metadata["obstacle_radius"]),
         particle_radius=float(raw_metadata["particle_radius"]),
@@ -254,7 +257,7 @@ def write_animation(
     axis.set_aspect("equal", adjustable="box")
     axis.set_xlabel("x [m]")
     axis.set_ylabel("y [m]")
-    axis.set_title(f"System 2 - {metadata.run_id}")
+    axis.set_title(animation_title(metadata))
     axis.grid(color="#d9dee7", linewidth=0.5, alpha=0.7)
 
     axis.add_patch(Circle((0.0, 0.0), metadata.outer_radius, fill=False, color="#222222", linewidth=1.3))
@@ -332,6 +335,20 @@ def colors_for_frame(frame: AnimationFrame, supports_state_coloring: bool) -> li
     if not supports_state_coloring:
         return ["#2775d1" for _ in frame.particles]
     return [USED_COLOR if particle.used else FRESH_COLOR for particle in frame.particles]
+
+
+def animation_title(metadata: System2AnimationMetadata) -> str:
+    stiffness_label = "unknown" if metadata.stiffness is None else format_stiffness(metadata.stiffness)
+    return f"TP4 - N={metadata.particle_count} - K={stiffness_label}"
+
+
+def format_stiffness(stiffness: float) -> str:
+    if stiffness <= 0:
+        return f"{stiffness:g}"
+    exponent = round(math.log10(stiffness))
+    if abs(stiffness - 10**exponent) <= max(1e-9, abs(stiffness) * 1e-9):
+        return f"10e{exponent}"
+    return f"{stiffness:g}"
 
 
 def scatter_size_for_particle_radius(axis, particle_radius: float) -> float:

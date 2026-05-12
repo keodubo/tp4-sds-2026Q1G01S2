@@ -14,6 +14,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TP3_PROJECT_DIR = PROJECT_ROOT / "SdS_TP3_2026Q1G01CS2_Codigo"
 DEFAULT_PARTICLE_COUNTS = (100, 250, 500, 750, 1000)
+REQUIRED_OUTPUT_FILES = (
+    "snapshot.txt",
+    "center_contacts.csv",
+    "used_fraction.csv",
+    "radial_profile_samples.csv",
+    "radial_profiles.csv",
+    "metadata.json",
+)
 
 sys.path.insert(0, str(TP3_PROJECT_DIR / "src"))
 
@@ -180,8 +188,13 @@ def write_configs_and_manifest(runs: list[RunSpec]) -> Path:
     return manifest_path
 
 
-def run_sweep(runs: list[RunSpec], skip_validation: bool) -> None:
+def run_sweep(runs: list[RunSpec], skip_validation: bool, resume: bool = False) -> None:
+    skipped = 0
     for index, run in enumerate(runs, start=1):
+        if resume and is_run_complete(run):
+            skipped += 1
+            print(f"[{index}/{len(runs)}] {run.run_id} SKIP complete existing output", flush=True)
+            continue
         config_path = (PROJECT_ROOT / run.config_path).resolve()
         config = load_config(config_path)
         if not skip_validation:
@@ -193,6 +206,63 @@ def run_sweep(runs: list[RunSpec], skip_validation: bool) -> None:
         result = run_simulation(config, config_path=config_path)
         runtime_seconds = time.perf_counter() - started_at
         write_reference_artifacts(run, result, runtime_seconds=runtime_seconds)
+    if resume:
+        print(f"Resume skipped {skipped}/{len(runs)} complete runs.", flush=True)
+
+
+def is_run_complete(run: RunSpec) -> bool:
+    output_dir = absolute_project_path(run.output_dir)
+    if not all((output_dir / file_name).is_file() for file_name in REQUIRED_OUTPUT_FILES):
+        return False
+    if any((output_dir / file_name).stat().st_size == 0 for file_name in REQUIRED_OUTPUT_FILES):
+        return False
+
+    metadata = load_json_file(output_dir / "metadata.json")
+    if metadata is None:
+        return False
+    settings = run.settings
+    expected_values: dict[str, object] = {
+        "contract_version": "tp3-reference-v1",
+        "run_id": run.run_id,
+        "N": run.particle_count,
+        "realization": run.realization,
+        "seed": run.seed,
+        "tf": settings.final_time,
+        "comparison_dt": settings.comparison_dt,
+        "sample_dt": settings.sample_dt,
+        "state_stride": settings.state_stride,
+        "full_contact_stride": settings.full_contact_stride,
+        "boundary_force_stride": settings.boundary_force_stride,
+    }
+    for key, expected in expected_values.items():
+        if key not in metadata or not metadata_value_matches(metadata[key], expected):
+            return False
+    try:
+        return float(metadata.get("final_time", -1.0)) >= settings.final_time - 1e-6
+    except (TypeError, ValueError):
+        return False
+
+
+def load_json_file(path: Path) -> dict[str, object] | None:
+    try:
+        with path.open(encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def metadata_value_matches(actual: object, expected: object) -> bool:
+    if isinstance(expected, float):
+        try:
+            return abs(float(actual) - expected) <= max(1e-9, abs(expected) * 1e-9)
+        except (TypeError, ValueError):
+            return False
+    return actual == expected
+
+
+def absolute_project_path(path: Path) -> Path:
+    return path if path.is_absolute() else PROJECT_ROOT / path
 
 
 def write_reference_artifacts(run: RunSpec, result: SimulationResult, *, runtime_seconds: float) -> None:
@@ -354,6 +424,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-events", type=int, default=100_000_000)
     parser.add_argument("--execute", action="store_true", help="Run TP3 simulations after writing configs.")
     parser.add_argument("--skip-validation", action="store_true", help="Skip per-config validation before --execute.")
+    parser.add_argument("--resume", action="store_true", help="Skip runs whose existing raw outputs are complete.")
     return parser.parse_args()
 
 
@@ -384,7 +455,7 @@ def main() -> int:
     )
 
     if args.execute:
-        run_sweep(runs, skip_validation=args.skip_validation)
+        run_sweep(runs, skip_validation=args.skip_validation, resume=args.resume)
     else:
         print("Dry-run only. Add --execute to run the simulations.")
     return 0

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -193,7 +194,7 @@ def write_animation(
     axis.set_aspect("equal", adjustable="box")
     axis.set_xlabel("x [m]")
     axis.set_ylabel("y [m]")
-    axis.set_title(f"TP3 Sistema 1 - {run.source_path.parent.name}")
+    axis.set_title(f"TP3 - N={run.particle_count}")
     axis.grid(color="#d9dee7", linewidth=0.5, alpha=0.7)
 
     axis.add_patch(Circle((0.0, 0.0), run.outer_radius, fill=False, color="#222222", linewidth=1.3))

@@ -107,6 +107,65 @@ class RunTp3ReferenceSweepTest(unittest.TestCase):
             self.assertEqual("2", rows[0]["radius_start"])
             self.assertEqual("0.1", rows[0]["inward_flux"])
 
+    def test_completed_run_detection_accepts_existing_complete_artifacts(self):
+        settings = run_tp3_reference_sweep.SweepSettings(experiment_id="unit", seed_count=1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run = run_tp3_reference_sweep.RunSpec(
+                settings=settings,
+                particle_count=100,
+                realization=0,
+                seed=12345,
+                config_path=Path("unused.toml"),
+                output_dir=Path(temp_dir),
+            )
+            write_tp3_complete_output(run)
+
+            self.assertTrue(run_tp3_reference_sweep.is_run_complete(run))
+
+    def test_completed_run_detection_rejects_incomplete_final_time(self):
+        settings = run_tp3_reference_sweep.SweepSettings(experiment_id="unit", seed_count=1)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run = run_tp3_reference_sweep.RunSpec(
+                settings=settings,
+                particle_count=100,
+                realization=0,
+                seed=12345,
+                config_path=Path("unused.toml"),
+                output_dir=Path(temp_dir),
+            )
+            write_tp3_complete_output(run, final_time=499.0)
+
+            self.assertFalse(run_tp3_reference_sweep.is_run_complete(run))
+
+
+def write_tp3_complete_output(run, *, final_time: float | None = None) -> None:
+    output_dir = run.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    settings = run.settings
+    metadata = {
+        "contract_version": "tp3-reference-v1",
+        "run_id": run.run_id,
+        "N": run.particle_count,
+        "realization": run.realization,
+        "seed": run.seed,
+        "tf": settings.final_time,
+        "comparison_dt": settings.comparison_dt,
+        "sample_dt": settings.sample_dt,
+        "state_stride": settings.state_stride,
+        "full_contact_stride": settings.full_contact_stride,
+        "boundary_force_stride": settings.boundary_force_stride,
+        "final_time": settings.final_time if final_time is None else final_time,
+    }
+    (output_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    for file_name in (
+        "snapshot.txt",
+        "center_contacts.csv",
+        "used_fraction.csv",
+        "radial_profile_samples.csv",
+        "radial_profiles.csv",
+    ):
+        (output_dir / file_name).write_text("header\n", encoding="utf-8")
+
 
 if __name__ == "__main__":
     unittest.main()

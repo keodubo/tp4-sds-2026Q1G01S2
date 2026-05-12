@@ -1,5 +1,7 @@
 import importlib.util
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -46,6 +48,84 @@ class RunSystem2SweepTest(unittest.TestCase):
         self.assertIn("state_stride = 5000", rendered)
         self.assertIn("full_contact_stride = 5000", rendered)
         self.assertIn("boundary_force_stride = 5000", rendered)
+
+    def test_completed_run_detection_requires_metadata_files_and_final_state_step(self):
+        settings = run_system2_sweep.SweepSettings(
+            experiment_id="unit",
+            seed_count=1,
+            final_time=1.0,
+            dt=0.5,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run = run_system2_sweep.RunSpec(
+                settings=settings,
+                stiffness=100.0,
+                particle_count=100,
+                realization=0,
+                seed=12345,
+                config_path=Path("unused.toml"),
+                output_dir=Path(temp_dir),
+            )
+            write_system2_complete_output(run)
+
+            self.assertTrue(run_system2_sweep.is_run_complete(run))
+
+    def test_completed_run_detection_rejects_partial_final_state(self):
+        settings = run_system2_sweep.SweepSettings(
+            experiment_id="unit",
+            seed_count=1,
+            final_time=1.0,
+            dt=0.5,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            run = run_system2_sweep.RunSpec(
+                settings=settings,
+                stiffness=100.0,
+                particle_count=100,
+                realization=0,
+                seed=12345,
+                config_path=Path("unused.toml"),
+                output_dir=Path(temp_dir),
+            )
+            write_system2_complete_output(run, final_state_step=1)
+
+            self.assertFalse(run_system2_sweep.is_run_complete(run))
+
+
+def write_system2_complete_output(run, *, final_state_step: int | None = None) -> None:
+    output_dir = run.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    settings = run.settings
+    metadata = {
+        "system": "system2",
+        "run_id": run.run_id,
+        "realization": run.realization,
+        "seed": run.seed,
+        "N": run.particle_count,
+        "k": run.stiffness,
+        "dt": settings.dt,
+        "steps": settings.steps,
+        "state_stride": settings.state_stride,
+        "full_contact_stride": settings.full_contact_stride,
+        "boundary_force_stride": settings.boundary_force_stride,
+    }
+    (output_dir / "metadata.json").write_text(json.dumps(metadata), encoding="utf-8")
+    step = settings.steps if final_state_step is None else final_state_step
+    (output_dir / "states.csv").write_text(
+        "step,t,particle_id,x,y,vx,vy\n"
+        "0,0.0,0,0.0,0.0,1.0,0.0\n"
+        f"{step},1.0,0,1.0,0.0,1.0,0.0\n",
+        encoding="utf-8",
+    )
+    (output_dir / "contacts.csv").write_text("step,t,type,i,j,overlap,nx,ny,fx,fy\n", encoding="utf-8")
+    (output_dir / "contact_events.csv").write_text(
+        "step,t,event_type,particle_id,distance,overlap\n",
+        encoding="utf-8",
+    )
+    (output_dir / "boundary_forces.csv").write_text(
+        "step,t,obstacle_fx,obstacle_fy,wall_fx,wall_fy,obstacle_contacts,wall_contacts\n",
+        encoding="utf-8",
+    )
 
 
 if __name__ == "__main__":
