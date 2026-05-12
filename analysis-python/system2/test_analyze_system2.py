@@ -51,6 +51,52 @@ class AnalyzeSystem2Test(unittest.TestCase):
         self.assertGreater(first["inward_flux_std"], 0.0)
         self.assertEqual(2, first["realizations"])
 
+    def test_near_obstacle_summary_uses_closest_obstacle_layer_not_full_zoom_window(self):
+        profiles = [
+            analyze_system2.RadialProfile(
+                k=1000.0,
+                n=100,
+                realization=0,
+                radius_mid=2.1,
+                density=10.0,
+                normal_velocity=-0.2,
+                inward_flux=2.0,
+                frames=1,
+                particle_samples=1,
+            ),
+            analyze_system2.RadialProfile(
+                k=1000.0,
+                n=100,
+                realization=0,
+                radius_mid=4.1,
+                density=99.0,
+                normal_velocity=-0.8,
+                inward_flux=99.0,
+                frames=1,
+                particle_samples=1,
+            ),
+        ]
+
+        summary = analyze_system2.near_obstacle_rows(profiles)
+
+        self.assertEqual(1, len(summary))
+        self.assertAlmostEqual(10.0, summary[0]["density"])
+        self.assertAlmostEqual(0.2, summary[0]["normal_velocity"])
+        self.assertAlmostEqual(2.0, summary[0]["inward_flux"])
+
+    def test_near_obstacle_tp3_uses_closest_obstacle_layer_not_full_zoom_window(self):
+        rows = [
+            {"N": 100, "realization": 0, "radius_mid": 2.1, "density": 10.0, "normal_velocity": -0.2, "inward_flux": 2.0},
+            {"N": 100, "realization": 0, "radius_mid": 4.1, "density": 99.0, "normal_velocity": -0.8, "inward_flux": 99.0},
+        ]
+
+        summary = analyze_system2.near_obstacle_tp3(rows)
+
+        self.assertEqual(1, len(summary))
+        self.assertAlmostEqual(10.0, summary[0]["density"])
+        self.assertAlmostEqual(0.2, summary[0]["normal_velocity"])
+        self.assertAlmostEqual(2.0, summary[0]["inward_flux"])
+
     def test_layer_s2_rows_use_closest_radial_bin_per_seed_and_k(self):
         profiles = [
             analyze_system2.RadialProfile(
@@ -142,6 +188,106 @@ class AnalyzeSystem2Test(unittest.TestCase):
         )
         self.assertIn("Sistema 2", fake_plt.axes[0].title)
 
+    def test_radial_inward_flux_zoom_sets_tight_y_axis_from_visible_means(self):
+        profiles = [
+            analyze_system2.RadialProfile(
+                k=1000.0,
+                n=100,
+                realization=0,
+                radius_mid=2.1,
+                density=1.0,
+                normal_velocity=-0.2,
+                inward_flux=0.2,
+                frames=1,
+                particle_samples=1,
+            ),
+            analyze_system2.RadialProfile(
+                k=1000.0,
+                n=100,
+                realization=1,
+                radius_mid=2.1,
+                density=1.0,
+                normal_velocity=-0.4,
+                inward_flux=0.4,
+                frames=1,
+                particle_samples=1,
+            ),
+        ]
+        fake_plt = FakePlt()
+
+        analyze_system2.plot_radial_curves(
+            profiles,
+            "inward_flux",
+            "Flujo entrante Jin(S) [1/(m s)]",
+            Path("radial.png"),
+            fake_plt,
+            FakeNormalize,
+            FakeScalarMappable,
+            xlim=(1.5, 5.0),
+        )
+
+        self.assertEqual((0.0, 0.36), fake_plt.axes[0].ylim)
+
+    def test_runtime_plot_uses_log_scale_on_time_axis(self):
+        fake_plt = FakePlt()
+
+        analyze_system2.plot_runtime(
+            rows=[
+                {"k": 1000.0, "N": 100, "realization": 0, "runtime_seconds": 10.0},
+                {"k": 1000.0, "N": 250, "realization": 0, "runtime_seconds": 100.0},
+            ],
+            tp3_rows=[{"N": 100, "realization": 0, "runtime_seconds": 1.0}],
+            path=Path("runtime.png"),
+            plt=fake_plt,
+        )
+
+        self.assertEqual("log", fake_plt.axes[0].yscale)
+
+    def test_zoomed_nonnegative_y_axis_uses_observable_means(self):
+        axis = FakeAxis()
+        rows = [{"inward_flux": 0.01}, {"inward_flux": 0.02}]
+
+        analyze_system2.set_zoomed_nonnegative_yaxis(axis, rows, "inward_flux")
+
+        self.assertEqual((0.0, 0.024), axis.ylim)
+
+    def test_energy_sample_includes_delta_over_initial_energy(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            run_dir = root / "run"
+            run_dir.mkdir()
+            (run_dir / "metadata.json").write_text('{"k": 10.0}', encoding="utf-8")
+            (run_dir / "states.csv").write_text(
+                "step,t,particle_id,x,y,vx,vy\n"
+                "0,0.0,1,0.0,0.0,1.0,0.0\n"
+                "1,1.0,1,0.0,0.0,2.0,0.0\n",
+                encoding="utf-8",
+            )
+            (run_dir / "contacts.csv").write_text(
+                "step,t,contact_type,particle_id,other_id,overlap,force_x,force_y\n",
+                encoding="utf-8",
+            )
+            run = analyze_system2.Run(run_id="run", k=10.0, n=1, realization=0, output_dir=Path("run"))
+
+            rows = analyze_system2.compute_energy_sample(run, root)
+
+        self.assertAlmostEqual(0.0, rows[0]["relative_energy_delta"])
+        self.assertAlmostEqual(3.0, rows[1]["relative_energy_delta"])
+
+    def test_energy_plot_uses_delta_over_initial_energy(self):
+        fake_plt = FakePlt()
+        rows = [
+            {"k": 1000.0, "N": 100, "realization": 0, "t": 0.0, "relative_energy_delta": 0.0},
+            {"k": 1000.0, "N": 100, "realization": 0, "t": 1.0, "relative_energy_delta": 0.02},
+        ]
+
+        analyze_system2.plot_energy(rows, Path("energy.png"), fake_plt)
+
+        self.assertEqual([0.0, 0.02], fake_plt.axes[0].lines[0]["ys"])
+        self.assertEqual("Delta E / E inicial", fake_plt.axes[0].ylabel)
+
 
 class FakePlt:
     def __init__(self):
@@ -177,11 +323,17 @@ class FakeAxis:
     def __init__(self):
         self.lines = []
         self.title = ""
+        self.ylabel = ""
+        self.ylim = None
+        self.yscale = None
 
     def plot(self, xs, ys, **kwargs):
-        self.lines.append(kwargs)
+        self.lines.append({"xs": xs, "ys": ys, **kwargs})
 
     def fill_between(self, xs, y1, y2, **kwargs):
+        pass
+
+    def errorbar(self, xs, ys, yerr=None, **kwargs):
         pass
 
     def set_xlabel(self, label):
@@ -195,6 +347,12 @@ class FakeAxis:
 
     def set_xlim(self, *args):
         pass
+
+    def set_ylim(self, bottom=None, top=None, *args, **kwargs):
+        self.ylim = (bottom, top)
+
+    def set_yscale(self, scale):
+        self.yscale = scale
 
     def grid(self, *args, **kwargs):
         pass

@@ -425,6 +425,9 @@ def compute_energy_sample(run: Run, root: Path, max_rows: int = 250) -> list[dic
         kinetic, time = kinetic_by_step[step]
         potential = potential_by_step.get(step, 0.0)
         rows.append({"k": run.k, "N": run.n, "realization": run.realization, "step": step, "t": time, "kinetic": kinetic, "potential": potential, "total": kinetic + potential})
+    initial_energy = rows[0]["total"] if rows else 0.0
+    for row in rows:
+        row["relative_energy_delta"] = ((row["total"] - initial_energy) / initial_energy) if initial_energy else 0.0
     stride = max(1, len(rows) // max_rows)
     return rows[::stride]
 
@@ -562,11 +565,14 @@ def plot_radial_curves(profiles, attr, ylabel, path, plt, Normalize, ScalarMappa
     for k in sorted({profile.k for profile in profiles}):
         fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
         ns = sorted({profile.n for profile in profiles})
+        visible_means: list[float] = []
         for n in ns:
             rows = radial_mean_std_by_radius([profile for profile in profiles if profile.k == k and profile.n == n], attr)
             xs = [row["radius_mid"] for row in rows]
             ys = [row["mean"] for row in rows]
             err = [row["std"] for row in rows]
+            if xlim and attr == "inward_flux":
+                visible_means.extend(row["mean"] for row in rows if xlim[0] <= row["radius_mid"] <= xlim[1])
             color = color_for_n(n)
             ax.plot(xs, ys, color=color, linewidth=1.8, label=f"N={n}")
             ax.fill_between(xs, [y - e for y, e in zip(ys, err)], [y + e for y, e in zip(ys, err)], color=color, alpha=0.12, linewidth=0)
@@ -575,6 +581,8 @@ def plot_radial_curves(profiles, attr, ylabel, path, plt, Normalize, ScalarMappa
         ax.set_title(f"Sistema 2: {ylabel}, k={format_k(k)} N/m")
         if xlim:
             ax.set_xlim(*xlim)
+        if visible_means:
+            set_zoomed_nonnegative_yaxis(ax, [{"inward_flux": value} for value in visible_means], "inward_flux")
         ax.grid(alpha=0.3)
         ax.legend(title="N", ncol=2)
         suffix = f"_k{int(k)}"
@@ -584,11 +592,12 @@ def plot_radial_curves(profiles, attr, ylabel, path, plt, Normalize, ScalarMappa
 
 def plot_near_obstacle(profiles, tp3_radial, path, plt) -> None:
     rows = near_obstacle_rows(profiles)
+    tp3_near_rows = near_obstacle_tp3(tp3_radial) if tp3_radial else []
     fig, axes = plt.subplots(3, 1, figsize=(8, 10), constrained_layout=True, sharex=True)
     for attr, axis, ylabel in [
-        ("inward_flux", axes[0], "Jin cerca del obstaculo [1/(m s)]"),
-        ("density", axes[1], "Densidad fresca cerca del obstaculo [1/m^2]"),
-        ("normal_velocity", axes[2], "|<v_fin>| cerca del obstaculo [m/s]"),
+        ("inward_flux", axes[0], "Jin en S~2 [1/(m s)]"),
+        ("density", axes[1], "Densidad fresca en S~2 [1/m^2]"),
+        ("normal_velocity", axes[2], "|<v_fin>| en S~2 [m/s]"),
     ]:
         for k in sorted({row["k"] for row in rows}):
             selected = [row for row in rows if row["k"] == k]
@@ -602,9 +611,9 @@ def plot_near_obstacle(profiles, tp3_radial, path, plt) -> None:
                 marker="o",
                 label=f"TP4 k={format_k(k)} N/m",
             )
-        if attr == "inward_flux" and tp3_radial:
-            tp3_rows = near_obstacle_tp3(tp3_radial)
-            plot_n_summary(axis, tp3_rows, "inward_flux", "inward_flux_std", line_color="black", linestyle="-.", marker="s", label="TP3")
+        if attr == "inward_flux" and tp3_near_rows:
+            plot_n_summary(axis, tp3_near_rows, "inward_flux", "inward_flux_std", line_color="black", linestyle="-.", marker="s", label="TP3")
+            set_zoomed_nonnegative_yaxis(axis, [*rows, *tp3_near_rows], "inward_flux")
         axis.set_ylabel(ylabel)
         axis.grid(alpha=0.3)
         axis.legend()
@@ -661,6 +670,8 @@ def near_obstacle_rows(profiles: Sequence[RadialProfile]) -> list[dict[str, floa
                 {
                     "k": k,
                     "N": n,
+                    "target_radius": LAYER_S_TARGET,
+                    "radius_mid": mean([row["radius_mid"] for row in per_seed]),
                     "density": mean([row["density"] for row in per_seed]),
                     "density_std": sample_std([row["density"] for row in per_seed]),
                     "normal_velocity": mean([abs(row["normal_velocity"]) for row in per_seed]),
@@ -722,11 +733,12 @@ def near_obstacle_per_seed(profiles: Sequence[RadialProfile], k: float, n: int) 
             if profile.k == k
             and profile.n == n
             and profile.realization == realization
-            and NEAR_OBSTACLE_MIN <= profile.radius_mid <= NEAR_OBSTACLE_MAX
         ]
+        selected = closest_profiles_to_radius(selected, LAYER_S_TARGET)
         rows.append(
             {
                 "realization": realization,
+                "radius_mid": mean([p.radius_mid for p in selected]),
                 "density": mean([p.density for p in selected]),
                 "normal_velocity": mean([p.normal_velocity for p in selected]),
                 "inward_flux": mean([p.inward_flux for p in selected]),
@@ -758,13 +770,13 @@ def near_obstacle_tp3(rows: Sequence[dict[str, float]]) -> list[dict[str, float]
             selected = [
                 row
                 for row in rows
-                if int(row["N"]) == n
-                and int(row["realization"]) == realization
-                and NEAR_OBSTACLE_MIN <= row["radius_mid"] <= NEAR_OBSTACLE_MAX
+                if int(row["N"]) == n and int(row["realization"]) == realization
             ]
+            selected = closest_dict_rows_to_radius(selected, LAYER_S_TARGET)
             if selected:
                 per_seed.append(
                     {
+                        "radius_mid": mean([row["radius_mid"] for row in selected]),
                         "density": mean([row.get("density", 0.0) for row in selected]),
                         "normal_velocity": abs(mean([row.get("normal_velocity", 0.0) for row in selected])),
                         "inward_flux": mean([row["inward_flux"] for row in selected]),
@@ -773,6 +785,8 @@ def near_obstacle_tp3(rows: Sequence[dict[str, float]]) -> list[dict[str, float]
         out.append(
             {
                 "N": n,
+                "target_radius": LAYER_S_TARGET,
+                "radius_mid": mean([row["radius_mid"] for row in per_seed]),
                 "density": mean([row["density"] for row in per_seed]),
                 "density_std": sample_std([row["density"] for row in per_seed]),
                 "normal_velocity": mean([row["normal_velocity"] for row in per_seed]),
@@ -837,6 +851,7 @@ def profile_value(profile: RadialProfile, attr: str) -> float:
 
 def plot_k_comparison(summary, profiles, tp3_scanning, tp3_radial, path, plt) -> None:
     near_rows = near_obstacle_rows(profiles)
+    tp3_near = near_obstacle_tp3(tp3_radial) if tp3_radial else []
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), constrained_layout=True)
     for k in sorted({row["k"] for row in summary}):
         rows = [row for row in summary if row["k"] == k]
@@ -863,13 +878,13 @@ def plot_k_comparison(summary, profiles, tp3_scanning, tp3_radial, path, plt) ->
         )
     if tp3_scanning:
         plot_n_summary(axes[0], tp3_scanning, "J_mean", "J_std", line_color="black", linestyle="-.", marker="s", label="TP3")
-    if tp3_radial:
-        tp3_near = near_obstacle_tp3(tp3_radial)
+    if tp3_near:
         plot_n_summary(axes[1], tp3_near, "inward_flux", "inward_flux_std", line_color="black", linestyle="-.", marker="s", label="TP3")
     axes[0].set_xlabel("N")
     axes[0].set_ylabel("<J> [1/s]")
     axes[1].set_xlabel("N")
-    axes[1].set_ylabel("Jin cerca del obstaculo [1/(m s)]")
+    axes[1].set_ylabel("Jin en S~2 [1/(m s)]")
+    set_zoomed_nonnegative_yaxis(axes[1], [*near_rows, *tp3_near], "inward_flux")
     for axis in axes:
         axis.grid(alpha=0.3)
         axis.legend()
@@ -891,7 +906,7 @@ def plot_k_scalars(summary, profiles, path, plt) -> None:
     axes[2].plot(xs, [row["max_Jin"] for row in rows], marker="o")
     axes[0].set_ylabel("maximo <J>")
     axes[1].set_ylabel("N*(k)")
-    axes[2].set_ylabel("maximo Jin cerca del obstaculo")
+    axes[2].set_ylabel("maximo Jin en S~2")
     for axis in axes:
         axis.set_xscale("log")
         axis.set_xlabel("k [N/m]")
@@ -993,6 +1008,7 @@ def plot_runtime(rows, tp3_rows, path, plt) -> None:
     ax.set_xlabel("N")
     ax.set_ylabel("Tiempo de ejecucion [s]")
     ax.set_title("Tiempo de ejecucion en funcion de N: TP4 vs TP3")
+    ax.set_yscale("log")
     ax.legend()
     ax.grid(alpha=0.3)
     fig.savefig(path, dpi=180)
@@ -1003,10 +1019,10 @@ def plot_energy(rows, path, plt) -> None:
     fig, ax = plt.subplots(figsize=(8, 5), constrained_layout=True)
     for key in sorted({(row["k"], row["N"]) for row in rows}):
         selected = [row for row in rows if (row["k"], row["N"]) == key]
-        ax.plot([row["t"] for row in selected], [row["total"] for row in selected], color=color_for_n(key[1]), linestyle=K_LINE_STYLES.get(key[0], "-"), label=f"k={format_k(key[0])} N/m, N={key[1]}")
+        ax.plot([row["t"] for row in selected], [row["relative_energy_delta"] for row in selected], color=color_for_n(key[1]), linestyle=K_LINE_STYLES.get(key[0], "-"), label=f"k={format_k(key[0])} N/m, N={key[1]}")
     ax.set_xlabel("Tiempo [s]")
-    ax.set_ylabel("Energia total [J]")
-    ax.set_title("Validacion de energia total, corridas representativas")
+    ax.set_ylabel("Delta E / E inicial")
+    ax.set_title("Validacion de energia relativa, corridas representativas")
     ax.legend()
     ax.grid(alpha=0.3)
     fig.savefig(path, dpi=180)
@@ -1043,6 +1059,14 @@ def plot_n_summary(
             capsize=3,
             linestyle="none",
         )
+
+
+def set_zoomed_nonnegative_yaxis(axis, rows: Sequence[dict[str, float]], y_key: str, padding: float = 0.2) -> None:
+    values = [max(0.0, float(row[y_key])) for row in rows if y_key in row]
+    if not values:
+        return
+    top = max(max(values) * (1.0 + padding), 1e-12)
+    axis.set_ylim(0.0, round(top, 12))
 
 
 def mean(values: Sequence[float]) -> float:
