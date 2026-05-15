@@ -53,6 +53,7 @@ class EcmAccumulator:
 
 REQUIRED_SYSTEM1_METHODS = ("beeman", "euler", "gear5", "verlet")
 ECM_PLOT_METHOD_ORDER = ("euler", "gear5", "verlet", "beeman")
+ECM_DETAIL_METHOD_ORDER = ("verlet", "beeman")
 ECM_PLOT_STYLES = {
     "euler": {"marker": "o", "linestyle": "-", "linewidth": 1.4, "zorder": 2},
     "gear5": {"marker": "s", "linestyle": "-", "linewidth": 1.4, "zorder": 2},
@@ -423,7 +424,12 @@ def write_ecm_vs_dt_figure(
     validate_ecm_grid(rows, required_dts)
 
     figures_dir.mkdir(parents=True, exist_ok=True)
-    fig, axis = plt.subplots(figsize=(8, 5))
+    fig, (axis, detail_axis) = plt.subplots(
+        1,
+        2,
+        figsize=(12, 5),
+        gridspec_kw={"width_ratios": (1.45, 1.0)},
+    )
     for method in ECM_PLOT_METHOD_ORDER:
         method_rows = sorted(
             (row for row in rows if row.method == method),
@@ -436,11 +442,32 @@ def write_ecm_vs_dt_figure(
             **ECM_PLOT_STYLES[method],
         )
 
-    axis.set_title("System 1 ECM vs dt")
+    axis.set_title("Sistema 1: ECM vs dt")
     axis.set_xlabel("dt (s)")
     axis.set_ylabel("ECM")
     axis.grid(True, which="both", linestyle="--", alpha=0.35)
     axis.legend()
+
+    for method in ECM_DETAIL_METHOD_ORDER:
+        method_rows = sorted(
+            (row for row in rows if row.method == method),
+            key=lambda row: row.dt,
+        )
+        style = dict(ECM_PLOT_STYLES[method])
+        style["linewidth"] = 2.2
+        detail_axis.loglog(
+            [row.dt for row in method_rows],
+            [row.ecm for row in method_rows],
+            label=method,
+            markersize=6.0,
+            **style,
+        )
+
+    detail_axis.set_title("Detalle: ECM Verlet vs Beeman")
+    detail_axis.set_xlabel("dt (s)")
+    detail_axis.set_ylabel("ECM")
+    detail_axis.grid(True, which="both", linestyle="--", alpha=0.35)
+    detail_axis.legend()
     fig.tight_layout()
 
     output_path = figures_dir / "ecm_vs_dt.png"

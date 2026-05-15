@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analyze_system1 import (
+    ECM_DETAIL_METHOD_ORDER,
     ECM_PLOT_METHOD_ORDER,
     ECM_PLOT_STYLES,
     EcmRow,
@@ -193,6 +194,17 @@ class AnalyzeSystem1Test(unittest.TestCase):
         self.assertGreater(
             ECM_PLOT_STYLES["beeman"]["zorder"],
             ECM_PLOT_STYLES["verlet"]["zorder"],
+        )
+
+    def test_ecm_vs_dt_detail_uses_raw_verlet_and_beeman_curves(self):
+        self.assertEqual(("verlet", "beeman"), ECM_DETAIL_METHOD_ORDER)
+        self.assertNotEqual(
+            ECM_PLOT_STYLES["beeman"]["marker"],
+            ECM_PLOT_STYLES["verlet"]["marker"],
+        )
+        self.assertNotEqual(
+            ECM_PLOT_STYLES["beeman"]["linestyle"],
+            ECM_PLOT_STYLES["verlet"]["linestyle"],
         )
 
     def test_position_plot_uses_distinct_method_markers(self):

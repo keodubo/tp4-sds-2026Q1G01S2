@@ -181,22 +181,20 @@ and `../outputs/system1-euler-smoke.csv` contains rows with `method=euler`.
 **Checklist:**
 
 - [ ] Implement original Verlet with previous state estimated by Euler evaluated at `-dt`.
-- [ ] Use the damped oscillator recurrence derived from centered acceleration and centered velocity:
+- [ ] Use the explicit original Verlet recurrence from the theory:
 
 ```text
-x(t+dt) =
-    ((2*m - k*dt^2)*x(t) + (gamma*dt/2 - m)*x(t-dt))
-    / (m + gamma*dt/2)
+x(t+dt) = 2*x(t) - x(t-dt) + a(t)*dt^2
 ```
 
-- [ ] Do not implement the force-independent shortcut `x(t+dt)=2*x(t)-x(t-dt)+a(t)*dt^2` for the damped oscillator, because `a(t)` depends on velocity and would otherwise be circular.
-- [ ] Export Verlet velocity using centered difference:
+- [ ] Evaluate the damped acceleration using the configured initial velocity at `t=0` and the explicit backward velocity estimate for later steps:
 
 ```text
-v(t) = (x(t+dt) - x(t-dt)) / (2*dt)
+v(t) ~= (x(t) - x(t-dt)) / dt
+a(t) = (-k*x(t) - gamma*v(t)) / m
 ```
 
-- [ ] Compute one extra internal Verlet position to export `v(tf)`.
+- [ ] Export Verlet velocity using that same explicit estimate.
 - [ ] Implement Beeman predictor-corrector for velocity-dependent forces.
 - [ ] Initialize Beeman `a(t-dt)` from the Euler-estimated previous state.
 - [ ] Implement Gear 5 predictor-corrector from the theory.
@@ -219,7 +217,7 @@ r[n+2] = -(gamma/m)*r[n+1] - (k/m)*r[n]
 
 - [ ] Emit fixed method names: `verlet`, `beeman`, `gear5`.
 - [ ] Test that the CSV contains all four methods for each `dt`.
-- [ ] Test the Verlet one-step update against the damped recurrence, including the denominator term `m + gamma*dt/2`.
+- [ ] Test the Verlet one-step update against the explicit original-Verlet recurrence.
 
 **Exit criteria for `1.1`:**
 

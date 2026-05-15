@@ -63,7 +63,7 @@ class IntegratorContractTest {
     }
 
     @Test
-    void verletUsesDampedCenteredVelocityRecurrenceForFirstStep() {
+    void verletUsesOriginalExplicitRecurrenceForFirstStep() {
         System1Parameters parameters = new System1Parameters(
                 2.0,
                 4.0,
@@ -79,9 +79,9 @@ class IntegratorContractTest {
         double previousPosition = parameters.initialPosition()
                 - parameters.initialVelocity() * dt
                 + 0.5 * initialAcceleration * dt * dt;
-        double expectedNextPosition = ((2.0 * parameters.mass() - parameters.springConstant() * dt * dt) * parameters.initialPosition()
-                + (parameters.gamma() * dt / 2.0 - parameters.mass()) * previousPosition)
-                / (parameters.mass() + parameters.gamma() * dt / 2.0);
+        double expectedNextPosition = 2.0 * parameters.initialPosition()
+                - previousPosition
+                + initialAcceleration * dt * dt;
 
         OscillatorState nextState = new VerletIntegrator().integrate(parameters, dt).get(1);
 
@@ -90,7 +90,7 @@ class IntegratorContractTest {
     }
 
     @Test
-    void verletExportsFinalVelocityUsingOneExtraCenteredPosition() {
+    void verletCarriesExplicitBackwardVelocityAfterFirstStep() {
         System1Parameters parameters = new System1Parameters(
                 2.0,
                 4.0,
@@ -106,15 +106,34 @@ class IntegratorContractTest {
         double previousPosition = parameters.initialPosition()
                 - parameters.initialVelocity() * dt
                 + 0.5 * initialAcceleration * dt * dt;
-        double position1 = verletNextPosition(parameters, dt, previousPosition, parameters.initialPosition());
-        double position2 = verletNextPosition(parameters, dt, parameters.initialPosition(), position1);
-        double position3 = verletNextPosition(parameters, dt, position1, position2);
-        double expectedFinalVelocity = (position3 - position1) / (2.0 * dt);
+        double position1 = explicitVerletNextPosition(parameters, dt, previousPosition, parameters.initialPosition(), parameters.initialVelocity());
+        double velocity1 = (position1 - parameters.initialPosition()) / dt;
+        double position2 = explicitVerletNextPosition(parameters, dt, parameters.initialPosition(), position1, velocity1);
 
         List<OscillatorState> states = new VerletIntegrator().integrate(parameters, dt);
 
+        assertEquals(position2, states.get(2).position(), 1e-12);
         assertEquals(0.02, states.get(2).time(), 1e-12);
-        assertEquals(expectedFinalVelocity, states.get(2).velocity(), 1e-12);
+        assertEquals((position2 - position1) / dt, states.get(2).velocity(), 1e-12);
+    }
+
+    @Test
+    void verletAndBeemanDoNotCollapseToTheSameEcmForDampedOscillator() {
+        System1Parameters defaults = System1Parameters.defaults();
+        System1Parameters parameters = new System1Parameters(
+                defaults.mass(),
+                defaults.springConstant(),
+                defaults.gamma(),
+                0.1,
+                defaults.initialPosition(),
+                defaults.initialVelocity(),
+                List.of(0.001)
+        );
+
+        double verletEcm = positionEcm(new VerletIntegrator().integrate(parameters, 0.001), parameters);
+        double beemanEcm = positionEcm(new BeemanIntegrator().integrate(parameters, 0.001), parameters);
+
+        assertTrue(verletEcm > beemanEcm * 100.0, "verletEcm=" + verletEcm + ", beemanEcm=" + beemanEcm);
     }
 
     @Test
@@ -240,11 +259,32 @@ class IntegratorContractTest {
         );
     }
 
-    private static double verletNextPosition(System1Parameters parameters, double dt, double previousPosition, double position) {
-        double mass = parameters.mass();
-        double numerator = (2.0 * mass - parameters.springConstant() * dt * dt) * position
-                + (parameters.gamma() * dt / 2.0 - mass) * previousPosition;
-        double denominator = mass + parameters.gamma() * dt / 2.0;
-        return numerator / denominator;
+    private static double explicitVerletNextPosition(
+            System1Parameters parameters,
+            double dt,
+            double previousPosition,
+            double position,
+            double velocity
+    ) {
+        double acceleration = new Oscillator(parameters).acceleration(position, velocity);
+        return 2.0 * position - previousPosition + acceleration * dt * dt;
+    }
+
+    private static double positionEcm(List<OscillatorState> states, System1Parameters parameters) {
+        double squaredErrorSum = 0.0;
+        for (OscillatorState state : states) {
+            double error = state.position() - analyticalPosition(parameters, state.time());
+            squaredErrorSum += error * error;
+        }
+        return squaredErrorSum / states.size();
+    }
+
+    private static double analyticalPosition(System1Parameters parameters, double time) {
+        double beta = parameters.gamma() / (2.0 * parameters.mass());
+        double omega = Math.sqrt(parameters.springConstant() / parameters.mass() - beta * beta);
+        double coefficient = (parameters.initialVelocity() + beta * parameters.initialPosition()) / omega;
+        double oscillatoryPosition = parameters.initialPosition() * Math.cos(omega * time)
+                + coefficient * Math.sin(omega * time);
+        return Math.exp(-beta * time) * oscillatoryPosition;
     }
 }

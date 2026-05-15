@@ -222,32 +222,20 @@ For this oscillator, the force depends on velocity:
 a(x, v) = (-k*x - gamma*v) / m
 ```
 
-Using the plain force-independent Verlet update directly would make `a(t)` depend on the centered velocity, which depends on `x(t+dt)`. Therefore the integrator must use original Verlet with the damping term handled explicitly through the centered velocity:
+The assignment asks for original Verlet, so the position update must remain the explicit
+Störmer-Verlet recurrence from the theory:
 
 ```text
-a(t) = (x(t+dt) - 2*x(t) + x(t-dt)) / dt^2
-v(t) = (x(t+dt) - x(t-dt)) / (2*dt)
+x(t+dt) = 2*x(t) - x(t-dt) + a(t)*dt^2
 ```
 
-Substituting these into:
+Because the damped oscillator acceleration needs velocity, evaluate `a(t)` with the
+available explicit velocity estimate rather than solving the damping term implicitly:
 
 ```text
-m*a(t) = -k*x(t) - gamma*v(t)
-```
-
-gives the explicit update:
-
-```text
-(m + gamma*dt/2)*x(t+dt) =
-    (2*m - k*dt^2)*x(t) + (gamma*dt/2 - m)*x(t-dt)
-```
-
-or:
-
-```text
-x(t+dt) =
-    ((2*m - k*dt^2)*x(t) + (gamma*dt/2 - m)*x(t-dt))
-    / (m + gamma*dt/2)
+v(0) = configured initial velocity
+v(t) ~= (x(t) - x(t-dt)) / dt for later steps
+a(t) = (-k*x(t) - gamma*v(t)) / m
 ```
 
 The first previous state is estimated with Euler evaluated at `-dt`, following slide 14 of the theory:
@@ -257,13 +245,11 @@ x(-dt) = x(0) - v(0)*dt + 0.5*a(0)*dt^2
 v(-dt) = v(0) - a(0)*dt
 ```
 
-The exported velocity uses the centered formula from the theory:
+The exported velocity for `t > 0` uses the same explicit backward estimate:
 
 ```text
-v(t) = (x(t+dt) - x(t-dt)) / (2*dt)
+v(t) ~= (x(t) - x(t-dt)) / dt
 ```
-
-To export `v(tf)` consistently, the integrator computes one extra internal position `x(tf+dt)` but does not write a `tf+dt` row.
 
 ### Beeman
 
